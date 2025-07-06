@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Karyawan;
+use Exception;
+use App\Models\Task;
 use App\Models\Absensi;
+use App\Models\Karyawan;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Izin; // Import the Izin model
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class KaryawanController extends Controller
-{  
+{
     use SoftDeletes;
 
     public function izins()
@@ -34,11 +38,59 @@ class KaryawanController extends Controller
 
         return $this;
     }
-    
-    // Menampilkan semua karyawan dengan relasi jabatan
-    public function index()
+
+    public function getuser()
     {
-        $karyawan = Karyawan::with('jabatan')->get();
+        $karyawan = DB::table('users')
+            ->get();
+
+        return response()->json($karyawan);
+    }
+
+    // Menampilkan semua karyawan dengan relasi jabatan
+    public function index(Request $request)
+    {
+        $karyawan = DB::table('karyawans as k')
+            ->leftJoin('users as u', 'k.email', 'u.email')
+            ->leftJoin('jabatan as j', 'k.jabatan_id', 'j.id')
+            ->leftJoin('izin as i', function ($join) {
+                $join->on('k.id', '=', 'i.id_karyawan')
+                ->where('i.status', 'disetujui')
+                    ->whereBetween('i.created_at', [now()->startOfYear(), now()->endOfYear()]);
+            })
+            ->when($request->email, function ($query) use ($request) {
+                $query->where('k.email', $request->email);
+            })
+            ->groupBy(
+                'k.id',
+                'u.nama_karyawan',
+                'k.nip',
+                'k.nik',
+                'k.email',
+                'k.alamat',
+                'k.status',
+                'k.jabatan_id',
+                'j.jabatan',
+                'k.no_handphone'
+            )
+            ->select(
+                'k.id',
+                'u.nama_karyawan',
+                'k.nip',
+                'k.nik',
+                'k.email',
+                'k.alamat',
+                'k.status',
+                'k.jabatan_id',
+                'j.jabatan',
+                'k.no_handphone',
+                DB::raw('COUNT(i.id) as jumlah_cuti'),
+                DB::raw('GREATEST(0, 12 - COUNT(i.id)) as sisa_cuti') // batas minimum 0
+            )
+            ->get();
+
+
+
         return response()->json($karyawan);
     }
 
@@ -46,16 +98,12 @@ class KaryawanController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'nama_karyawan' => 'required|string|max:255',
             'nip' => 'digits_between:8,10|unique:karyawans,nip',
             'nik' => 'required|unique:karyawans,nik|max:16',
             'email' => 'required|email|unique:karyawans,email|max:255',
             'no_handphone' => 'required|string|max:15',
             'alamat' => 'required|string|max:255',
             'jabatan_id' => 'required|exists:jabatan,id',
-            'password' => 'required|min:6',
-            'device_code' => 'nullable|string|max:255|unique:karyawans,device_code',
-            'avatar' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -64,30 +112,26 @@ class KaryawanController extends Controller
                 'message' => 'Validation failed',
             ], 422);
         }
-    
+
         try {
             $karyawan = Karyawan::create([
-                'nama_karyawan' => $request->nama_karyawan,
                 'nip' => $request->nip,
                 'nik' => $request->nik,
                 'email' => $request->email,
                 'no_handphone' => $request->no_handphone,
                 'alamat' => $request->alamat,
                 'jabatan_id' => $request->jabatan_id,
-                'password' => Hash::make($request->password),
-                'device_code' => $request->device_code,
-                'avatar' => $request->avatar,
             ]);
-            
-        return response()->json(['message' => 'Karyawan created successfully', 'data' => $karyawan], 201);
-    } catch (\Exception $e) {
-        // Catch any exceptions and return a detailed error message
-        return response()->json([
-            'message' => 'An error occurred while creating the karyawan',
-            'error' => $e->getMessage(),
-        ], 500);
+
+            return response()->json(['message' => 'Karyawan created successfully', 'data' => $karyawan], 201);
+        } catch (\Exception $e) {
+            // Catch any exceptions and return a detailed error message
+            return response()->json([
+                'message' => 'An error occurred while creating the karyawan',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
-}
     public function show($id)
     {
         $karyawan = Karyawan::with('jabatan')->findOrFail($id);
@@ -101,21 +145,29 @@ class KaryawanController extends Controller
     {
         $karyawan = Karyawan::findOrFail($id);
 
-        $request->validate([
-            'nama_karyawan' => 'required|string|max:255',
-            'nip' => 'required|string|size:8|unique:karyawans,nip',
-            'nik' => 'required|string|size:16|unique:karyawans,nik',
-            'email' => 'required|email|unique:karyawans,email',
+        $validated = $request->validate([
+            'nip' => [
+                'required',
+                'string',
+                'size:8',
+                Rule::unique('karyawans', 'nip')->ignore($karyawan->id),
+            ],
+            'nik' => [
+                'required',
+                'string',
+                'size:16',
+                Rule::unique('karyawans', 'nik')->ignore($karyawan->id),
+            ],
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('karyawans', 'email')->ignore($karyawan->id),
+            ],
             'no_handphone' => 'required|string|min:10|max:15',
             'alamat' => 'required|string|max:500',
-            'password' => 'required|string|min:6', // Hanya untuk tambah data
-            'jabatan_id' => 'required|exists:jabatans,id',
-            'device_code' => 'nullable|string|max:255',
-        ]);        
-
-        if ($request->filled('password')) {
-            $validated['password'] = Hash::make($validated['password']);
-        }
+            'status' => 'required|string',
+            'jabatan_id' => 'required|exists:jabatan,id',
+        ]);
 
         $karyawan->update(array_filter($validated));
 
@@ -133,6 +185,8 @@ class KaryawanController extends Controller
 
             // Delete related Absensi records
             Absensi::where('id_karyawan', $id)->delete();
+
+            Task::where('id_karyawan', $id)->delete();
 
             // Soft delete the karyawan
             $karyawan->delete();

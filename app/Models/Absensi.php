@@ -22,10 +22,10 @@ class Absensi extends Model
         'latitude_masuk',   // Lokasi (latitude) saat absensi masuk
         'longitude_masuk',  // Lokasi (longitude) saat absensi masuk
         'status',           // Status absensi (Terlambat/Tepat waktu)
-        'jam_keluar',       // Jam keluar kerja
-        'foto_keluar',      // Foto saat absensi keluar
-        'latitude_keluar',  // Lokasi (latitude) saat absensi keluar
-        'longitude_keluar', // Lokasi (longitude) saat absensi keluar
+        'jam_pulang',       // Jam pulang kerja
+        'foto_pulang',      // Foto saat absensi pulang
+        'latitude_pulang',  // Lokasi (latitude) saat absensi pulang
+        'longitude_pulang', // Lokasi (longitude) saat absensi pulang
     ];
 
     // Mutator untuk tanggal (format saat diakses)
@@ -43,11 +43,11 @@ class Absensi extends Model
         return null;
     }
 
-    // Akses foto keluar dalam bentuk base64
-    public function getFotoKeluarBase64Attribute()
+    // Akses foto pulang dalam bentuk base64
+    public function getFotopulangBase64Attribute()
     {
-        if ($this->foto_keluar) {
-            return base64_encode(Storage::disk('public')->get($this->foto_keluar));
+        if ($this->foto_pulang) {
+            return base64_encode(Storage::disk('public')->get($this->foto_pulang));
         }
         return null;
     }

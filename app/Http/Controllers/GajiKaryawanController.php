@@ -30,7 +30,7 @@ class GajiKaryawanController extends Controller
             'hadir' => 'required|integer',
             'cuti' => 'required|integer',
             'lembur' => 'required|integer',
-            'dinas_keluar_kota' => 'required|integer',
+            'dinas_pulang_kota' => 'required|integer',
             'potongan' => 'required|numeric',
             'gaji_pokok' => 'required|numeric',
         ]);                
@@ -65,7 +65,7 @@ class GajiKaryawanController extends Controller
             'hadir' => 'required|integer',
             'cuti' => 'required|integer',
             'lembur' => 'required|integer',
-            'dinas_keluar_kota' => 'required|integer',
+            'dinas_pulang_kota' => 'required|integer',
             'potongan' => 'required|numeric',
             'gaji_pokok' => 'required|numeric',
         ]);

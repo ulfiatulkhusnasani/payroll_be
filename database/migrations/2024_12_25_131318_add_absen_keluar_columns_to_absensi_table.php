@@ -20,20 +20,20 @@ return new class extends Migration
                     ->onDelete('cascade');
             }
 
-            if (!Schema::hasColumn('absensi', 'jam_keluar')) {
-                $table->time('jam_keluar')->nullable()->after('longitude_masuk');
+            if (!Schema::hasColumn('absensi', 'jam_pulang')) {
+                $table->time('jam_pulang')->nullable()->after('longitude_masuk');
             }
 
-            if (!Schema::hasColumn('absensi', 'foto_keluar')) {
-                $table->longText('foto_keluar')->nullable()->after('jam_keluar');
+            if (!Schema::hasColumn('absensi', 'foto_pulang')) {
+                $table->longText('foto_pulang')->nullable()->after('jam_pulang');
             }
 
-            if (!Schema::hasColumn('absensi', 'latitude_keluar')) {
-                $table->decimal('latitude_keluar', 10, 7)->nullable()->after('foto_keluar');
+            if (!Schema::hasColumn('absensi', 'latitude_pulang')) {
+                $table->decimal('latitude_pulang', 10, 7)->nullable()->after('foto_pulang');
             }
 
-            if (!Schema::hasColumn('absensi', 'longitude_keluar')) {
-                $table->decimal('longitude_keluar', 10, 7)->nullable()->after('latitude_keluar');
+            if (!Schema::hasColumn('absensi', 'longitude_pulang')) {
+                $table->decimal('longitude_pulang', 10, 7)->nullable()->after('latitude_pulang');
             }
         });
     }
@@ -50,20 +50,20 @@ return new class extends Migration
                 $table->dropColumn('id_karyawan');
             }
 
-            if (Schema::hasColumn('absensi', 'jam_keluar')) {
-                $table->dropColumn('jam_keluar');
+            if (Schema::hasColumn('absensi', 'jam_pulang')) {
+                $table->dropColumn('jam_pulang');
             }
 
-            if (Schema::hasColumn('absensi', 'foto_keluar')) {
-                $table->dropColumn('foto_keluar');
+            if (Schema::hasColumn('absensi', 'foto_pulang')) {
+                $table->dropColumn('foto_pulang');
             }
 
-            if (Schema::hasColumn('absensi', 'latitude_keluar')) {
-                $table->dropColumn('latitude_keluar');
+            if (Schema::hasColumn('absensi', 'latitude_pulang')) {
+                $table->dropColumn('latitude_pulang');
             }
 
-            if (Schema::hasColumn('absensi', 'longitude_keluar')) {
-                $table->dropColumn('longitude_keluar');
+            if (Schema::hasColumn('absensi', 'longitude_pulang')) {
+                $table->dropColumn('longitude_pulang');
             }
         });
     }

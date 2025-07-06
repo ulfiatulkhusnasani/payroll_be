@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 use Laravel\Sanctum\PersonalAccessToken;
+use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
@@ -14,56 +16,91 @@ class AuthController extends Controller
      * Registrasi User baru
      */
     public function register(Request $request)
-    {
-        // Validasi input
-        $validated = $request->validate([
-            'nama_karyawan' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email|max:255',
-            'password' => 'required|string|min:6',
-        ]);
+{
+    // Validasi manual agar bisa menangkap error
+    $validator = Validator::make($request->all(), [
+        'nama_karyawan' => 'required|string|max:255',
+        'email' => 'required|email|unique:users,email|max:255',
+        'password' => 'required|string|min:6',
+    ]);
 
-        // Buat user baru
-        $user = User::create([
-            'nama_karyawan' => $validated['nama_karyawan'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']), // Hash password
-        ]);
-
-        // Buat token untuk user baru
-        // $token = $user->createToken('auth_token')->plainTextToken;
-       
-
-        // Kembalikan response sukses beserta token
+    // Jika validasi gagal, kembalikan response JSON
+    if ($validator->fails()) {
         return response()->json([
-            'message' => 'User berhasil didaftarkan',
-            'data' => $user,
-            // 'token' => $token // Token ditambahkan ke response
-        ], 201);
+            'message' => 'Validasi gagal ' . $validator->errors()->first(),
+        ], 400);
     }
+
+    // Ambil data valid
+    $validated = $validator->validated();
+
+    // Buat user baru
+    $user = User::create([
+        'nama_karyawan' => $validated['nama_karyawan'],
+        'email' => $validated['email'],
+        'role' => 'user',
+        'password' => Hash::make($validated['password']),
+    ]);
+
+    // Jika berhasil buat user, insert data ke tabel karyawans
+    if ($user) {
+        DB::table('karyawans')->insert([
+            'nip' => $request->nip,
+            'nik' => $request->nik,
+            'email' => $request->email,
+            'no_handphone' => $request->no_handphone,
+            'alamat' => $request->alamat,
+            'status' => "nonactive"
+        ]);
+    }
+
+    return response()->json([
+        'message' => 'User berhasil didaftarkan',
+        'data' => $user,
+    ], 201);
+}
 
     /**
      * Login dan menghasilkan token untuk user
      */
     public function login(Request $request)
     {
-        // Validasi input
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+        try {
 
-        // Cek kredensial login
-        if (Auth::attempt($request->only('email', 'password'))) {
-            $user = Auth::user();
+            $user = User::where('email', $request->email)->first();
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+            if (!$user) {
+                return response()->json(['message' => 'Email atau user tidak ditemukan'], 400);
+            }
+
+            if (!Hash::check($request->password, $user->password)) {
+                return response()->json(['message' => 'Password salah'], 400);
+            }
+
+            $karyawan = DB::table('karyawans')->where('email', $user->email)->where('status', 'active')->exists();
+
+
+            if (!$karyawan && $user->role != 'admin') {
+                return response()->json(['message' => 'Email atau user belum aktif sebagai karyawan, silahkan hubungi manager anda!'], 400);
+            }
+
+            $accessToken = $user->createToken('auth_token');
+            $accessToken->accessToken->update([
+                'expires_at' => now()->addHours(7)
+            ]);
+
+            $token = $accessToken->plainTextToken;
 
             return response()->json([
                 'message' => 'Login sukses.',
-                'token' => $token // Pastikan token tidak null
+                'user' => [
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'token' => $token
+                ],
             ], 200);
-        } else {
-            return response()->json(['message' => 'Login gagal.'], 401);
+        } catch (\Throwable $th) {
+            return response()->json(['message' => 'Login gagal'], 500);
         }
     }
 

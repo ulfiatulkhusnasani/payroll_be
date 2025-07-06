@@ -17,7 +17,7 @@ return new class extends Migration
             $table->integer('hadir')->default(0); // Jumlah hadir
             $table->integer('cuti')->default(0); // Jumlah cuti
             $table->integer('lembur')->default(0); // Jam lembur
-            $table->integer('dinas_keluar_kota')->default(0); // Hari dinas keluar kota
+            $table->integer('dinas_pulang_kota')->default(0); // Hari dinas pulang kota
             $table->decimal('potongan', 15, 2)->default(0); // Potongan gaji
             $table->decimal('gaji_pokok', 15, 2)->default(0); // Gaji pokok
             $table->timestamps(); // Tanggal dibuat dan diperbarui

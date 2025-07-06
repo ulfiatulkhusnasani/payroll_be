@@ -19,6 +19,7 @@ class Izin extends Model
         'keterangan',
         'durasi',
         'status',
+        'lampiran',
     ];
 
     // Relasi ke model Karyawan

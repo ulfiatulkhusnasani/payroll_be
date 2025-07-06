@@ -18,8 +18,7 @@ class Karyawan extends Model
         'alamat',
         'password',
         'jabatan_id',
-        'device_code',
-        'avatar',
+        'status',
     ];
 
     // Hidden attributes (like password)

@@ -16,6 +16,7 @@ class User extends Authenticatable
         'nama_karyawan',
         'email',
         'password',
+        'role',
     ];
 
     // Kolom yang disembunyikan dari serialisasi, seperti API response

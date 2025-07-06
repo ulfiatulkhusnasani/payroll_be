@@ -1,15 +1,24 @@
-<?php 
+<?php
 
 namespace App\Http\Controllers;
 
 use App\Models\Task;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $tasks = Task::with('karyawan')->get();
+        $tasks = DB::table('tasks as t')->select('t.*', 'u.nama_karyawan', 'j.jabatan')
+            ->leftJoin('karyawans as k', 't.id_karyawan', 'k.id', )
+            ->when($request->email, function ($query) use ($request) {
+                $query->where('k.email', $request->email);
+            })
+
+            ->leftJoin('users as u', 'k.email', 'u.email')
+            ->leftJoin('jabatan as j', 'k.jabatan_id', 'j.id')
+            ->get();
         return response()->json($tasks);
     }
 
@@ -21,7 +30,6 @@ class TaskController extends Controller
 
     public function store(Request $request)
     {
-        \Log::info($request->all());
 
         $request->validate([
             'id_karyawan' => 'required|exists:karyawans,id',
@@ -32,7 +40,6 @@ class TaskController extends Controller
             'batas_penyelesaian' => 'required|date',
             'tgl_selesai' => 'nullable|date',
             'point' => 'required|integer|min:0', // Validasi point
-            'status_approval' => 'required|in:pending,disetujui,ditolak', // Validasi status_approval
         ]);
 
         $task = Task::create([
@@ -44,7 +51,6 @@ class TaskController extends Controller
             'batas_penyelesaian' => $request->batas_penyelesaian,
             'tgl_selesai' => $request->tgl_selesai,
             'point' => $request->point, // Simpan point
-            'status_approval' => $request->status_approval, // Simpan status_approval
         ]);
 
         $task->load('karyawan');
@@ -62,7 +68,6 @@ class TaskController extends Controller
             'batas_penyelesaian' => 'required|date',
             'tgl_selesai' => 'nullable|date',
             'point' => 'required|integer|min:0', // Validasi point
-            'status_approval' => 'required|in:pending,disetujui,ditolak', // Validasi status_approval
         ]);
 
         $task = Task::findOrFail($id);

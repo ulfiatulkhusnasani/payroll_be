@@ -2,31 +2,53 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Absensi;
-use Illuminate\Validation\ValidationException;
+use Log;
 use Carbon\Carbon;
+use App\Models\Absensi;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Log as FacadesLog;
 
 class AbsensiController extends Controller
 {
     // Menampilkan semua data absensi
-    public function index()
+
+    public function getuserabsensi(Request $request)
+    {
+        $email = $request->query('email');
+        $absensi = DB::table('absensi as a')
+            ->join('karyawans as k', 'a.id_karyawan', 'k.id')
+            ->where('k.email', $email)
+            ->get();
+
+        return response()->json($absensi, 200);
+    }
+
+    public function getuserizin(Request $request)
+    {
+        $email = $request->query('email');
+        $izin = DB::table('izin as a')
+            ->join('karyawans as k', 'a.id_karyawan', 'k.id')
+            ->where('k.email', $email)
+            ->get();
+
+        return response()->json($izin, 200);
+    }
+
+    public function index(Request $request)
     {
         try {
-            $absensi = Absensi::with('karyawan')->get()->map(function ($absensi) {
-                $absensi->tanggal = Carbon::parse($absensi->tanggal)->format('d-m-Y');
-                $absensi->nama_karyawan = $absensi->karyawan ? $absensi->karyawan->nama_karyawan : null;
-
-                // // Konversi Base64 untuk foto masuk
-                // if ($absensi->foto_masuk) {
-                //     $absensi->foto_masuk_base64 =  base64_encode($absensi->foto_masuk);
-                // } else {
-                //     $absensi->foto_masuk_base64 = null;
-                // }
-
-                return $absensi;
-            });
+            $absensi =  DB::table('absensi as a')
+                ->join('karyawans as k', 'a.id_karyawan', 'k.id')
+                ->leftJoin('users as u', 'k.email', 'u.email')
+                ->select('a.*', 'u.nama_karyawan', 'u.email as email_karyawan')
+                ->when($request->email, function ($query) use ($request) {
+                    $query->where('k.email', $request->email);
+                })
+                ->get();
 
             return response()->json($absensi, 200);
         } catch (\Exception $e) {
@@ -42,37 +64,111 @@ class AbsensiController extends Controller
     {
         try {
             $validated = $request->validate([
-                'id_karyawan' => 'required|exists:karyawans,id',
+                'email_karyawan' => 'required|email',
                 'tanggal' => 'required|date',
                 'jam_masuk' => 'required|date_format:H:i',
-                'foto_masuk' => 'required', // Foto masuk berupa longText
+                'foto_masuk' => 'required',
                 'latitude_masuk' => 'required|numeric',
                 'longitude_masuk' => 'required|numeric',
-                'status' => 'required|string|in:Terlambat,Tepat waktu',
             ]);
 
-            $validated['tanggal'] = Carbon::parse($validated['tanggal'])->format('Y-m-d');
-            $absensi = Absensi::create($validated);
+            // Cari data karyawan
+            $karyawan = DB::table('karyawans')
+                ->where('email', $validated['email_karyawan'])
+                ->first();
 
-            $absensi->tanggal = Carbon::parse($absensi->tanggal)->format('d-m-Y');
+            // Ambil data kantor terbaru
+            $dataKantor = DB::table('data_kantor')
+                ->latest('created_at')
+                ->first();
 
+            if (!$dataKantor || ! $karyawan) {
+                return response()->json([
+                    'message' => 'Data tidak ditemukan',
+                    'error' => 'data tidak ditemukan',
+                ], 404);
+            }
+
+            // Hitung status kehadiran
+
+
+            $jamMasukKantor = Carbon::createFromFormat('H:i:s', $dataKantor->jam_masuk);
+
+            $jamMasukUser = Carbon::createFromFormat('H:i', $validated['jam_masuk']);
+            $status = $jamMasukUser->greaterThan($jamMasukKantor) ? 'Terlambat' : 'Tepat Waktu';
+
+            // Format tanggal
+            $tanggal = Carbon::parse($validated['tanggal'])->format('Y-m-d');
+
+            // Buat data absensi
+            $absensi = Absensi::create([
+                'id_karyawan' => $karyawan->id,
+                'tanggal' => $tanggal,
+                'jam_masuk' => $validated['jam_masuk'],
+                'foto_masuk' => $validated['foto_masuk'],
+                'latitude_masuk' => $validated['latitude_masuk'],
+                'longitude_masuk' => $validated['longitude_masuk'],
+                'status' => $status,
+            ]);
+
+            // Format response
             return response()->json([
                 'message' => 'Absensi berhasil disimpan',
-                'data' => $absensi
+                'data' => [
+                    ...$absensi->toArray(),
+                    'tanggal' => Carbon::parse($absensi->tanggal)->format('d-m-Y'),
+                    'status' => $status
+                ]
             ], 201);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validasi gagal',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function storepulang(Request $request, $id)
+    {
+        try {
+            $absensi = Absensi::findOrFail($id);
+
+            // Validasi data
+            $validated = $request->validate([
+                'jam_pulang' => 'required|date_format:H:i',
+                'foto_pulang' => 'required|string', // Menggunakan base64
+                'latitude_pulang' => 'required|numeric',
+                'longitude_pulang' => 'required|numeric',
+            ]);
+
+            // Update data absensi
+            $absensi->update($validated);
+
+            // Menambahkan base64 ke response
+            $absensi->foto_pulang_base64 = $validated['foto_pulang'] ? base64_encode(Storage::disk('public')->get($validated['foto_pulang'])) : null;
+
+            return response()->json([
+                'message' => 'Absensi pulang berhasil disimpan',
+                'data' => $absensi,
+            ], 200);
         } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Data tidak valid',
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+
             return response()->json([
                 'message' => 'Data gagal disimpan',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
-
     // Menampilkan detail absensi berdasarkan ID
     public function show($id)
     {
@@ -152,58 +248,4 @@ class AbsensiController extends Controller
             ], 500);
         }
     }
-
-    public function storeKeluar(Request $request, $id)
-{
-    try {
-        $absensi = Absensi::findOrFail($id);
-
-        // Validasi data
-        $validated = $request->validate([
-            'jam_keluar' => 'required|date_format:H:i',
-            'foto_keluar' => 'required|string', // Menggunakan base64
-            'latitude_keluar' => 'required|numeric',
-            'longitude_keluar' => 'required|numeric',
-        ]);
-
-        // Konversi base64 untuk foto keluar
-        if (isset($validated['foto_keluar']) && strpos($validated['foto_keluar'], 'data:image') === 0) {
-            try {
-                $imageData = base64_decode(explode(',', $validated['foto_keluar'])[1]);
-                $filePath = 'absensi/' . $id . '_foto_keluar.jpg';
-                Storage::disk('public')->put($filePath, $imageData);
-                $validated['foto_keluar'] = $filePath;
-            } catch (\Exception $e) {
-                \Log::error('Gagal menyimpan foto keluar: ' . $e->getMessage());
-                throw $e;
-            }
-        }
-
-        // Format jam_keluar
-        $validated['jam_keluar'] = Carbon::parse($validated['jam_keluar'])->format('H:i');
-
-        // Update data absensi
-        $absensi->update($validated);
-
-        // Menambahkan base64 ke response
-        $absensi->foto_keluar_base64 = $validated['foto_keluar'] ? base64_encode(Storage::disk('public')->get($validated['foto_keluar'])) : null;
-
-        return response()->json([
-            'message' => 'Absensi keluar berhasil disimpan',
-            'data' => $absensi,
-        ], 201);
-    } catch (ValidationException $e) {
-        return response()->json([
-            'message' => 'Data tidak valid',
-            'errors' => $e->errors(),
-        ], 422);
-    } catch (\Exception $e) {
-        \Log::error('Error storing absensi keluar: ' . $e->getMessage());
-
-        return response()->json([
-            'message' => 'Data gagal disimpan',
-            'error' => $e->getMessage(),
-        ], 500);
-    }
-}
 }

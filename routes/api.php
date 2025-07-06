@@ -8,13 +8,14 @@ use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\KaryawanController;
 use App\Http\Controllers\LemburController;
 use App\Http\Controllers\CutiController;
+use App\Http\Controllers\DataKantorController;
 use App\Http\Controllers\JabatanController;
 use App\Http\Controllers\DinasLuarKotaController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\TaskController;
 
 // Rute Publik
-Route::post('register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Rute yang Memerlukan Autentikasi Menggunakan Sanctum
@@ -23,15 +24,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
 
     // Rute untuk AbsensiController
-    Route::get('/absensi', [AbsensiController::class, 'index']);
+    Route::post('/absensi', [AbsensiController::class, 'index']);
     Route::post('/absensi/created', [AbsensiController::class, 'store']);
     Route::get('/absensi/{id}', [AbsensiController::class, 'show']);
     Route::put('/absensi/{id}', [AbsensiController::class, 'update']);
     Route::delete('/absensi/{id}', [AbsensiController::class, 'destroy']);
-    Route::post('absensi/{id}/keluar', [AbsensiController::class, 'storeKeluar']);
+    Route::post('absensi/{id}/pulang', [AbsensiController::class, 'storepulang']);
 
     // Rute untuk KaryawanController
-    Route::get('/karyawan', [KaryawanController::class, 'index']);
+    Route::post('/karyawan', [KaryawanController::class, 'index']);
     Route::post('/karyawan/created', [KaryawanController::class, 'store']);
     Route::put('/karyawan/{id}', [KaryawanController::class, 'update']);
     Route::delete('/karyawan/{id}', [KaryawanController::class, 'destroy']);
@@ -44,8 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/lembur/{id}', [LemburController::class, 'destroy']);
 
     // Rute untuk CutiController
-    Route::post('/izin', [IzinController::class, 'store']);
-    Route::get('/izin', [IzinController::class, 'index']);
+    Route::post('/izin/store', [IzinController::class, 'store']);
+    Route::post('/izin', [IzinController::class, 'index']);
     Route::put('/izin/{id}', [IzinController::class, 'update']);
     Route::delete('/izin/{id}', [IzinController::class, 'destroy']);
 
@@ -73,11 +74,20 @@ Route::middleware('auth:sanctum')->group(function () {
     // });
 
     // Route untuk TaskController
-    Route::get('/tasks', [TaskController::class, 'index']);
+    Route::post('/tasks', [TaskController::class, 'index']);
     Route::get('/tasks/{id}', [TaskController::class, 'show']);
-    Route::post('/tasks', [TaskController::class, 'store']);
+    Route::post('/tasks/store', [TaskController::class, 'store']);
     Route::put('/tasks/{id}', [TaskController::class, 'update']);
     Route::delete('/tasks/{id}', [TaskController::class, 'destroy']);
+    
+    Route::get('/payroll-summary', [PayrollController::class, 'getPayrollSummary']);
+    Route::post('/payroll-slip', [PayrollController::class, 'generateSlipGaji']);
+    Route::post('payroll-store', [PayrollController::class, 'store']);
+    Route::put('/payroll-update/{id}', [PayrollController::class, 'update']);
 
-    Route::get('/payroll-summary/{id}', [PayrollController::class, 'getPayrollSummary']);
+    Route::post('/datakantor/get', [DataKantorController::class, 'getDataKantor']);
+    Route::get('user/get', [KaryawanController::class, 'getuser']);
+    Route::get('user/absensi', [AbsensiController::class, 'getuserabsensi']);
+    Route::get('user/izin', [AbsensiController::class, 'getuserizin']);
+    Route::post('izin/tahunan', [IzinController::class, 'userCutiPertahun']);
 });

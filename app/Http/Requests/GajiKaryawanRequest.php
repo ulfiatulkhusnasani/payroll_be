@@ -19,7 +19,7 @@ class PayrollRequest extends FormRequest
             'hadir' => 'required|integer|min:0',
             'cuti' => 'required|integer|min:0',
             'lembur' => 'required|integer|min:0',
-            'dinas_keluar_kota' => 'required|numeric|min:0',
+            'dinas_pulang_kota' => 'required|numeric|min:0',
             'potongan' => 'required|numeric|min:0',
             'gaji_pokok' => 'required|numeric|min:0',
         ];
@@ -34,7 +34,7 @@ class PayrollRequest extends FormRequest
             'hadir.integer' => 'Jumlah hadir harus berupa angka.',
             'cuti.required' => 'Jumlah cuti wajib diisi.',
             'lembur.required' => 'Jumlah lembur wajib diisi.',
-            'dinas_keluar_kota.required' => 'Biaya dinas keluar kota wajib diisi.',
+            'dinas_pulang_kota.required' => 'Biaya dinas pulang kota wajib diisi.',
             'potongan.required' => 'Potongan wajib diisi.',
             'gaji_pokok.required' => 'Gaji pokok wajib diisi.',
         ];

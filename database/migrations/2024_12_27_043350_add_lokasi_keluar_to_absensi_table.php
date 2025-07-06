@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('absensi', function (Blueprint $table) {
-            $table->string('lokasi_keluar')->nullable(); // Menambahkan kolom lokasi_keluar
+            $table->string('lokasi_pulang')->nullable(); // Menambahkan kolom lokasi_pulang
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('absensi', function (Blueprint $table) {
-            $table->dropColumn('lokasi_keluar'); // Menghapus kolom lokasi_keluar
+            $table->dropColumn('lokasi_pulang'); // Menghapus kolom lokasi_pulang
         });
     }
 };

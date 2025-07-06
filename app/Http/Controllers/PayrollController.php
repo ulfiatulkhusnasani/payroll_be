@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Izin;
-use App\Models\DinasLuarKota;
-use App\Models\Absensi;
-use App\Models\Lembur;
-use App\Models\Jabatan;
-use Illuminate\Support\Facades\Auth;
+use Throwable;
 use Carbon\Carbon;
+use App\Models\Izin;
+use App\Models\Lembur;
+use App\Models\Absensi;
+use App\Models\Jabatan;
 use App\Models\Karyawan;
+use Illuminate\Http\Request;
+use App\Models\DinasLuarKota;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 
 class PayrollController extends Controller
 {
@@ -19,7 +22,7 @@ class PayrollController extends Controller
     {
         $workingDays = 0;
         $currentDate = $startDate->copy();
-        
+
         while ($currentDate->lte($endDate)) {
             // Hitung hanya jika bukan hari Minggu dan bukan hari libur nasional
             if (!$currentDate->isSunday() && !in_array($currentDate->format('Y-m-d'), $holidays)) {
@@ -27,146 +30,121 @@ class PayrollController extends Controller
             }
             $currentDate->addDay();
         }
-         
+
         return $workingDays;
     }
 
     // Fungsi untuk menghitung total bonus (kehadiran, dinas luar kota, lembur)
-    protected function calculateTotalBonus($bonusPerKaryawan, $kehadiranCount, $dinasLuarKotaDays, $lemburHours)
+    protected function calculateTotalBonus($bonusPerKaryawan, $kehadiranCount)
     {
         // Misalkan bonus dihitung dengan rumus seperti berikut:
         $bonusKehadiran = $kehadiranCount * $bonusPerKaryawan; // Bonus kehadiran
-        $bonusDinasLuarKota = $dinasLuarKotaDays * $bonusPerKaryawan; // Bonus dinas luar kota
-        $bonusLembur = $lemburHours * $bonusPerKaryawan; // Bonus lembur (misalnya per jam lembur)
+
 
         // Total bonus adalah penjumlahan dari bonus kehadiran, dinas luar kota, dan lembur
-        $totalBonus = $bonusKehadiran + $bonusDinasLuarKota + $bonusLembur;
+        $totalBonus = $bonusKehadiran;
 
         return $totalBonus;
     }
 
     // Tambahkan ini di controller Laravel Anda (misalnya, KaryawanController)
-public function index()
-{
-    $allKaryawan = Karyawan::with('jabatan')->get();
-    return response()->json($allKaryawan);
-}
+    public function index()
+    {
+        $allKaryawan = Karyawan::with('jabatan')->get();
+        return response()->json($allKaryawan);
+    }
 
     // Mendapatkan rekap jumlah izin, cuti, dan dinas luar kota serta kehadiran untuk semua karyawan
     public function getPayrollSummary()
     {
         try {
             // Mendapatkan semua karyawan dari tabel Karyawan
-            $allKaryawan = Karyawan::all();
+            $allKaryawan = DB::table('payroll as p')
+                ->join('karyawans as karyawan', 'p.id_karyawan', '=', 'karyawan.id')
+                ->leftJoin('karyawans as direktur', 'p.id_direktur', '=', 'direktur.id')
+                ->leftJoin('users as u', 'karyawan.email', '=', 'u.email')
+                ->leftJoin('users as ud', 'direktur.email', '=', 'ud.email')
+                ->leftJoin('jabatan as j', 'karyawan.jabatan_id', '=', 'j.id')
+                ->where('karyawan.status', 'active')
+                ->select(
+                    'karyawan.id',
+                    'u.nama_karyawan',
+                    'karyawan.nip',
+                    'karyawan.nik',
+                    'karyawan.email',
+                    'karyawan.alamat',
+                    'karyawan.status',
+                    'karyawan.jabatan_id',
+                    'karyawan.no_handphone',
+                    'j.jabatan',
+                    'p.gaji_pokok',
+                    'p.id as id_payroll',
+                    'p.uang_kehadiran',
+                      'p.total_point_kehadiran',
+                    'p.total_point_task',
+                    'p.uang_makan',
+                    'p.bonus',
+                    'p.tunjangan',
+                    'p.potongan',
+                    'p.total_gaji',
+                    'p.jumlah_izin',
+                    'p.jumlah_cuti',
+                    'p.jumlah_kehadiran',
+                    'p.kinerja',
+                    'p.tanggal',
+
+                    'ud.nama_karyawan as nama_direktur',
+                )
+                ->get();
+
 
             // Validasi jika tabel Karyawan kosong
             if ($allKaryawan->isEmpty()) {
                 return response()->json(['error' => 'Tidak ada karyawan yang ditemukan'], 404);
             }
 
-            // Mendapatkan bulan dan tahun saat ini
-            $currentMonth = Carbon::now()->month;
-            $currentYear = Carbon::now()->year;
-
-            // Daftar hari libur nasional
-            $holidays = [
-                '2024-01-01', // Tahun Baru
-                '2024-03-11', // Hari Raya Nyepi
-                '2024-05-01', // Hari Buruh
-                // Tambahkan hari libur lainnya di sini
-            ];
-
-            // Array untuk menyimpan rekap payroll setiap karyawan
             $payrollSummaries = [];
 
             // Iterasi melalui semua karyawan
             foreach ($allKaryawan as $karyawan) {
                 $idKaryawan = $karyawan->id;
                 $namaKaryawan = $karyawan->nama_karyawan;
-                $jabatan = $karyawan->jabatan; // Ambil jabatan karyawan
-
-                // Hitung jumlah hari izin dalam bulan ini
-                $izinDays = Izin::where('id_karyawan', $idKaryawan)
-                    ->where('alasan', 'IZIN')
-                    ->whereMonth('tgl_mulai', $currentMonth)
-                    ->whereYear('tgl_mulai', $currentYear)
-                    ->get()
-                    ->sum(fn ($izin) => $this->calculateWorkingDays(
-                        Carbon::parse($izin->tgl_mulai),
-                        Carbon::parse($izin->tgl_selesai),
-                        $holidays
-                    ));
-
-                // Menghitung durasi dinas luar kota dalam bulan ini
-                $dinasLuarKotaDays = DinasLuarKota::where('id_karyawan', $idKaryawan)
-                    ->whereMonth('tgl_berangkat', $currentMonth)
-                    ->whereYear('tgl_berangkat', $currentYear)
-                    ->get()
-                    ->sum(fn ($dinas) => $this->calculateWorkingDays(
-                        Carbon::parse($dinas->tgl_berangkat),
-                        Carbon::parse($dinas->tgl_kembali),
-                        $holidays
-                    ));
-
-                // Hitung jumlah hari cuti dalam bulan ini
-                $cutiDays = Izin::where('id_karyawan', $idKaryawan)
-                    ->where('alasan', 'CUTI')
-                    ->whereMonth('tgl_mulai', $currentMonth)
-                    ->whereYear('tgl_mulai', $currentYear)
-                    ->get()
-                    ->sum(fn ($cuti) => $this->calculateWorkingDays(
-                        Carbon::parse($cuti->tgl_mulai),
-                        Carbon::parse($cuti->tgl_selesai),
-                        $holidays
-                    ));
-
-                // Menghitung jumlah kehadiran unik (berdasarkan tanggal unik) dalam bulan ini
-                $kehadiranCount = Absensi::where('id_karyawan', $idKaryawan)
-                    ->whereMonth('tanggal', $currentMonth)
-                    ->whereYear('tanggal', $currentYear)
-                    ->distinct('tanggal') // Menghitung tanggal unik
-                    ->count('tanggal'); // Menghitung jumlah tanggal unik
-
-                // Menghitung total jam lembur dalam bulan ini
-                $lemburHours = Lembur::where('id_karyawan', $idKaryawan)
-                    ->whereMonth('tanggal_lembur', $currentMonth)
-                    ->whereYear('tanggal_lembur', $currentYear)
-                    ->sum('durasi_lembur');
-
                 // Menyimpan hasil rekap per karyawan
+
+                $tanggal = Carbon::make($karyawan->tanggal);
+                Carbon::setLocale('id'); // Pastikan menggunakan locale Bahasa Indonesia
+                $bulan = $tanggal->translatedFormat('F');
+                $tahun = $tanggal->year;
+
                 $payrollSummaries[] = [
                     'id_karyawan' => $idKaryawan,
                     'nama_karyawan' => $namaKaryawan,
-                    'jabatan' => $jabatan->jabatan ?? 'Tidak Ada Jabatan',
-                    'gaji_pokok' => $jabatan->gaji_pokok ?? 0,
-                    'uang_kehadiran_perhari' => $jabatan->uang_kehadiran_perhari ?? 0,
-                    'uang_makan' => $jabatan->uang_makan ?? 0,
-                    'bonus' => $jabatan->bonus ?? 0,
-                    'tunjangan' => $jabatan->tunjangan ?? 0,
-                    'potongan' => $jabatan->potongan ?? 0,
-                    'izin_count' => $izinDays,
-                    'dinas_luar_kota_count' => $dinasLuarKotaDays,
-                    'cuti_count' => $cutiDays,
-                    'kehadiran_count' => $kehadiranCount,
-                    'lembur_count' => $lemburHours,
-                    'total_bonus' => $this->calculateTotalBonus(
-                        $jabatan->bonus ?? 0,           // Bonus per karyawan
-                        $kehadiranCount,                // Jumlah hari kehadiran
-                        $dinasLuarKotaDays,             // Jumlah hari dinas luar kota
-                        $lemburHours                    // Jumlah jam lembur
-                    ),
-                    // Hitung total gaji keseluruhan
-                    'total_gaji' => ($jabatan->gaji_pokok ?? 0) + 
-                ($kehadiranCount * ($jabatan->uang_kehadiran_perhari ?? 0)) + 
-                ($dinasLuarKotaDays * ($jabatan->uang_makan ?? 0)) +
-                $this->calculateTotalBonus(
-                    $jabatan->bonus ?? 0,
-                    $kehadiranCount,
-                    $dinasLuarKotaDays,
-                    $lemburHours
-                ) + 
-                ($jabatan->tunjangan ?? 0) -
-                ($jabatan->potongan ?? 0), // Potongan
+                    'jabatan' => $karyawan->jabatan ?? 'Tidak Ada Jabatan',
+                    'gaji_pokok' => $karyawan->gaji_pokok ?? 0,
+                    'uang_harian' => $karyawan->uang_kehadiran ?? 0,
+                    'id_payroll' => $karyawan->id_payroll,
+                    'uang_makan' => $karyawan->uang_makan ?? 0,
+                    'bonus' => $karyawan->bonus ?? 0,
+                    'total_point_task' => $karyawan->total_point_task ?? 0,
+                    'total_point_kehadiran' => $karyawan->total_point_kehadiran ?? 0,
+                    'tunjangan' => $karyawan->tunjangan ?? 0,
+                    'potongan' => $karyawan->potongan,
+                    'izin_count' => $karyawan->jumlah_izin,
+                    'cuti_count' => $karyawan->jumlah_cuti,
+                    'kehadiran_count' => $karyawan->jumlah_kehadiran,
+                    'total_gaji' => $karyawan->total_gaji, // Potongan
+                    'slip_gaji' => [
+                        'month' => "$bulan $tahun",
+                        'name' => $namaKaryawan,
+                        'position' => $karyawan->jabatan,
+                        'employeeId' => $karyawan->nip,
+                        'basicSalary' => $karyawan->total_gaji,
+                        'allowances' => $karyawan->tunjangan,
+                        'deductions' => $karyawan->potongan,
+                        'netSalary' => $karyawan->total_gaji,
+                        'dirName' => $karyawan->nama_direktur,
+                        'performance' => $karyawan->kinerja,
+                    ]
                 ];
             }
 
@@ -178,56 +156,404 @@ public function index()
 
     public function generateSlipGaji(Request $request)
     {
+        // Ambil user saat ini
         try {
-            // Ambil user saat ini
-            $user = Auth::user();
-            if (!$user) {
-                return response()->json(['error' => 'User not authenticated'], 401);
+            $tanggal = Carbon::make($request->tanggal);
+            $bulan = $tanggal->month;
+            $tahun = $tanggal->year;
+            // Mendapatkan semua karyawan dari tabel Karyawan
+            $karyawan = DB::table('payroll as p')
+                ->join('karyawans as karyawan', 'p.id_karyawan', '=', 'karyawan.id')
+                ->leftJoin('karyawans as direktur', 'p.id_direktur', '=', 'direktur.id')
+                ->leftJoin('users as u', 'karyawan.email', '=', 'u.email')
+                ->leftJoin('users as ud', 'direktur.email', '=', 'ud.email')
+                ->leftJoin('jabatan as j', 'karyawan.jabatan_id', '=', 'j.id')
+                ->where('karyawan.status', 'active')
+                ->select(
+                    'karyawan.id',
+                    'u.nama_karyawan',
+                    'karyawan.nip',
+                    'karyawan.nik',
+                    'karyawan.email',
+                    'karyawan.alamat',
+                    'karyawan.status',
+                    'karyawan.jabatan_id',
+                    'karyawan.no_handphone',
+                    'j.jabatan',
+                    'p.gaji_pokok',
+                    'p.uang_kehadiran',
+                    'p.uang_makan',
+                    'p.total_point_kehadiran',
+                    'p.total_point_task',
+                    'p.bonus',
+                    'p.tunjangan',
+                    'p.potongan',
+                    'p.total_gaji',
+                    'p.jumlah_izin',
+                    'p.jumlah_cuti',
+                    'p.jumlah_kehadiran',
+                    'p.kinerja',
+                    'p.tanggal',
+
+                    'ud.nama_karyawan as nama_direktur',
+                )
+                ->where('karyawan.email', $request->email)
+                ->whereMonth('p.tanggal', $bulan)
+                ->whereYear('p.tanggal', $tahun)
+                ->first();
+
+
+            // Validasi jika tabel Karyawan kosong
+            if (!$karyawan) {
+                return response()->json(['message' => 'Slip gaji anda belum pulang di bulan ini'], 404);
             }
 
-            // Pastikan karyawan memiliki jabatan
-            $jabatan = $user->jabatan; // Relasi ke tabel Jabatan
-            if (!$jabatan) {
-                return response()->json(['error' => 'Jabatan tidak ditemukan untuk karyawan ini'], 404);
-            }
+            $payrollSummaries = [];
 
-            // Panggil fungsi untuk mendapatkan rekap payroll summary
-            $payrollSummary = $this->getPayrollSummary()->getData();
+            // Iterasi melalui semua karyawan
+            $namaKaryawan = $karyawan->nama_karyawan;
+            // Menyimpan hasil rekap per karyawan
 
-            if (isset($payrollSummary->error)) {
-                return response()->json(['error' => $payrollSummary->error], 500);
-            }
+            $tanggal = Carbon::make($karyawan->tanggal);
+            Carbon::setLocale('id'); // Pastikan menggunakan locale Bahasa Indonesia
+            $bulan = $tanggal->translatedFormat('F');
+            $tahun = $tanggal->year;
 
-            // Ambil data total bonus dari payroll summary
-            $totalBonus = $payrollSummary->total_bonus ?? 0;
-
-            // Data untuk PDF
-            $data = [
-                'nama_karyawan' => $user->nama_karyawan,
-                'nama_jabatan' => $jabatan->jabatan ?? 'Tidak Ada Jabatan',
-                'bulan' => Carbon::now()->format('F'),
-                'tahun' => Carbon::now()->year,
-                'izin' => $payrollSummary->izin_count ?? 0,
-                'cuti' => $payrollSummary->cuti_count ?? 0,
-                'dinas_luar_kota' => $payrollSummary->dinas_luar_kota_count ?? 0,
-                'kehadiran' => $payrollSummary->kehadiran_count ?? 0,
-                'lembur' => $payrollSummary->lembur_count ?? 0,
-                'total_bonus' => $totalBonus,
-                'gaji_pokok' => $jabatan->gaji_pokok ?? 0,
-                'tunjangan' => $jabatan->tunjangan ?? 0,
-                'bonus' => $jabatan->bonus ?? 0,
-                'potongan' => $jabatan->potongan ?? 0,
-                'total_gaji' => $payrollSummary->total_gaji ?? 0, // Tambahkan total gaji di sini
+            $payrollSummaries = [
+                'month' => "$bulan $tahun",
+                'name' => $namaKaryawan,
+                'position' => $karyawan->jabatan,
+                'employeeId' => $karyawan->nip,
+                'basicSalary' => $karyawan->total_gaji,
+                'allowances' => $karyawan->tunjangan,
+                'deductions' => $karyawan->potongan,
+                'netSalary' => $karyawan->total_gaji,
+                'dirName' => $karyawan->nama_direktur,
+                'performance' => $karyawan->kinerja,
             ];
 
-            // Generate PDF
-            $pdf = app('dompdf.wrapper');
-            $pdf->loadView('pdf.slip_gaji', $data);
 
-            // Simpan atau tampilkan PDF
-            return $pdf->stream("slip_gaji_{$user->nama_karyawan}{$data['bulan']}{$data['tahun']}.pdf");
+            return response()->json($payrollSummaries);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function store(Request $request)
+    {
+        try {
+            // Validasi
+            $request->validate([
+                'id_karyawan' => 'required|exists:karyawans,id',
+                // 'id_direktur' => 'required|exists:karyawans,id',
+                'tanggal' => 'required|date',
+                'target_absensi' => 'required|integer',
+                // 'target_produktivitas' => 'required|integer',
+                'hari_produktif' => 'required|integer',
+            ]);
+
+            $tanggal = Carbon::make($request->tanggal);
+            $bulan = $tanggal->month;
+            $tahun = $tanggal->year;
+
+
+            // Ambil data jabatan
+            $data_jabatan = DB::table('karyawans as k')
+                ->leftJoin('jabatan as j', 'j.id', 'k.jabatan_id')
+                ->select('j.*')
+                ->where('k.id', $request->id_karyawan)
+                ->first();
+
+            $point_kehadiran = 0;
+            // Absensi
+            $absensi = DB::table('absensi as a')
+                ->where('a.id_karyawan', $request->id_karyawan)
+                ->whereMonth('a.tanggal', $bulan)
+                ->whereYear('a.tanggal', $tahun)
+                ->get();
+
+            foreach ($absensi as $a) {
+
+                $point = 10;
+
+                if ($a->status == 'Terlamabat') {
+                    $point -= 5;
+                }
+
+                $point_kehadiran += $point;
+            }
+
+            // Izin dan Cuti
+            $izin = DB::table('izin as a')
+                ->where('a.id_karyawan', $request->id_karyawan)
+                ->where('a.alasan', 'izin')
+                ->whereMonth('a.tgl_mulai', $bulan)
+                ->whereYear('a.tgl_mulai', $tahun)
+                ->count();
+
+            $cuti = DB::table('izin as a')
+                ->where('a.id_karyawan', $request->id_karyawan)
+                ->where('a.alasan', 'cuti')
+                ->whereMonth('a.tgl_mulai', $bulan)
+                ->whereYear('a.tgl_mulai', $tahun)
+                ->count();
+
+            // Produktivitas (total point)
+            $produktivitas  = 0;
+            $tasks = DB::table('tasks as t')
+                ->select('t.tgl_mulai', 't.tgl_selesai', 't.batas_penyelesaian', 't.point')
+                ->where('t.id_karyawan', $request->id_karyawan)
+                ->where('t.status', 'selesai')
+                ->whereMonth('t.tgl_mulai', $bulan)
+                ->whereYear('t.tgl_mulai', $tahun)
+                ->get();
+
+            $target_tasks = DB::table('tasks as t')
+                ->select(DB::raw('IFNULL(SUM(t.point), 0) AS target_produktivitas'))
+                ->where('t.id_karyawan', $request->id_karyawan)
+                ->where('t.status', 'selesai')
+                ->whereMonth('t.tgl_mulai', $bulan)
+                ->whereYear('t.tgl_mulai', $tahun)
+                ->groupBy('t.point')
+                ->first();
+
+            if (!$target_tasks || $target_tasks->target_produktivitas == 0) {
+                return response()->json(['error' => 'Karyawan masih belum punya task'], 500);
+            }
+
+
+            foreach ($tasks as $t) {
+                $tgl_selesai = Carbon::make($t->tgl_selesai);
+                $batas_penyelesaian = Carbon::make($t->batas_penyelesaian);
+                $point = (int) $t->point;
+
+                if ($tgl_selesai->gt($batas_penyelesaian)) {
+                    $selisih_hari = $tgl_selesai->diffInDays($batas_penyelesaian);
+                    $point -= $selisih_hari * 5;
+                }
+
+                $produktivitas += $point;
+            }
+
+
+            $jumlah_hari_produktif = (int) $request->hari_produktif;
+            $jumlah_kehadiran = (int) count($absensi);
+            $jumlah_cuti = (int) $cuti;
+            $jumlah_izin = (int) $izin;
+
+            $gaji_pokok = (int) $data_jabatan->gaji_pokok;
+            $uang_kehadiran = (int) $data_jabatan->uang_kehadiran_perhari;
+            $uang_makan = (int) $data_jabatan->uang_makan;
+            $tunjangan = (int) $data_jabatan->tunjangan;
+
+            $potongan = 0;
+            $total_uang_kehadiran = (int) $jumlah_kehadiran * $uang_kehadiran;
+            $jumlah_tidak_hadir = (int) $jumlah_hari_produktif - $jumlah_kehadiran;
+
+            if ($jumlah_tidak_hadir > 0) {
+                $potongan = (int) $jumlah_tidak_hadir * $uang_kehadiran;
+            }
+
+
+
+            // Panggil API prediksi
+            $DecisionTree = Http::post('http://127.0.0.1:9000/prediksi', [
+                'kehadiran' => (int) $point_kehadiran,
+                'target_kehadiran' => (int) $request->target_absensi,
+                'produktivitas' => (int) $produktivitas,
+                'target_produktivitas' => (int) $target_tasks->target_produktivitas ?? 0,
+                'bonus_jabatan' => (int) $data_jabatan->bonus,
+            ]);
+
+            $resp = $DecisionTree->json();
+            $kinerja = $resp['kinerja'];
+            $bonus = $resp['bonus'];
+
+            $total_gaji = ($gaji_pokok + $uang_makan + $tunjangan + $total_uang_kehadiran + $bonus) - $potongan;
+
+            $dataInput = [
+                'id_karyawan' => $request->id_karyawan,
+                // 'id_direktur' => $request->id_direktur,
+                'tanggal' => $tanggal,
+                'kinerja' => $kinerja,
+                'jumlah_kehadiran' => $jumlah_kehadiran,
+                'jumlah_cuti' => $jumlah_cuti,
+                'jumlah_izin' => $jumlah_izin,
+                'total_point_kehadiran' => $point_kehadiran,
+                'total_point_task' => $produktivitas,
+                'gaji_pokok' => $gaji_pokok,
+                'uang_kehadiran' => $total_uang_kehadiran,
+                'uang_makan' => $uang_makan,
+                'tunjangan' => $tunjangan,
+                'bonus' => $bonus,
+                'potongan' => $potongan,
+                'total_gaji' => $total_gaji
+            ];
+
+            // Simpan ke database jika perlu
+            DB::table('payroll')->insert($dataInput);
+            return response()->json($dataInput);
+        } catch (Throwable $e) {
+            return response()->json(['error' => $e->getMessage() . ' ' . $e->getLine()], 500);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            // Validasi
+            $request->validate([
+                'id_karyawan' => 'required|exists:karyawans,id',
+                // 'id_direktur' => 'required|exists:karyawans,id',
+                'tanggal' => 'required|date',
+                'target_absensi' => 'required|integer',
+                // 'target_produktivitas' => 'required|integer',
+                'hari_produktif' => 'required|integer',
+            ]);
+
+            $tanggal = Carbon::make($request->tanggal);
+            $bulan = $tanggal->month;
+            $tahun = $tanggal->year;
+
+
+            // Ambil data jabatan
+            $data_jabatan = DB::table('karyawans as k')
+                ->leftJoin('jabatan as j', 'j.id', 'k.jabatan_id')
+                ->select('j.*')
+                ->where('k.id', $request->id_karyawan)
+                ->first();
+
+            $point_kehadiran = 0;
+            // Absensi
+            $absensi = DB::table('absensi as a')
+                ->where('a.id_karyawan', $request->id_karyawan)
+                ->whereMonth('a.tanggal', $bulan)
+                ->whereYear('a.tanggal', $tahun)
+                ->get();
+
+            foreach ($absensi as $a) {
+
+                $point = 10;
+
+                if ($a->status == 'Terlamabat') {
+                    $point -= 5;
+                }
+
+                $point_kehadiran += $point;
+            }
+
+            // Izin dan Cuti
+            $izin = DB::table('izin as a')
+                ->where('a.id_karyawan', $request->id_karyawan)
+                ->where('a.alasan', 'izin')
+                ->whereMonth('a.tgl_mulai', $bulan)
+                ->whereYear('a.tgl_mulai', $tahun)
+                ->count();
+
+            $cuti = DB::table('izin as a')
+                ->where('a.id_karyawan', $request->id_karyawan)
+                ->where('a.alasan', 'cuti')
+                ->whereMonth('a.tgl_mulai', $bulan)
+                ->whereYear('a.tgl_mulai', $tahun)
+                ->count();
+
+            // Produktivitas (total point)
+            $produktivitas  = 0;
+            $tasks = DB::table('tasks as t')
+                ->select('t.tgl_mulai', 't.tgl_selesai', 't.batas_penyelesaian', 't.point')
+                ->where('t.id_karyawan', $request->id_karyawan)
+                ->where('t.status', 'selesai')
+                ->whereMonth('t.tgl_mulai', $bulan)
+                ->whereYear('t.tgl_mulai', $tahun)
+                ->get();
+
+            $target_tasks = DB::table('tasks as t')
+                ->select(DB::raw('IFNULL(SUM(t.point), 0) AS target_produktivitas'))
+                ->where('t.id_karyawan', $request->id_karyawan)
+                ->where('t.status', 'selesai')
+                ->whereMonth('t.tgl_mulai', $bulan)
+                ->whereYear('t.tgl_mulai', $tahun)
+                ->groupBy('t.point')
+                ->first();
+
+            if (!$target_tasks || $target_tasks->target_produktivitas == 0) {
+                return response()->json(['error' => 'Karyawan masih belum punya task'], 500);
+            }
+
+
+            foreach ($tasks as $t) {
+                $tgl_selesai = Carbon::make($t->tgl_selesai);
+                $batas_penyelesaian = Carbon::make($t->batas_penyelesaian);
+                $point = (int) $t->point;
+
+                if ($tgl_selesai->gt($batas_penyelesaian)) {
+                    $selisih_hari = $tgl_selesai->diffInDays($batas_penyelesaian);
+                    $point -= $selisih_hari * 5;
+                }
+
+                $produktivitas += $point;
+            }
+
+
+            $jumlah_hari_produktif = (int) $request->hari_produktif;
+            $jumlah_kehadiran = (int) count($absensi);
+            $jumlah_cuti = (int) $cuti;
+            $jumlah_izin = (int) $izin;
+
+            $gaji_pokok = (int) $data_jabatan->gaji_pokok;
+            $uang_kehadiran = (int) $data_jabatan->uang_kehadiran_perhari;
+            $uang_makan = (int) $data_jabatan->uang_makan;
+            $tunjangan = (int) $data_jabatan->tunjangan;
+
+            $potongan = 0;
+            $total_uang_kehadiran = (int) $jumlah_kehadiran * $uang_kehadiran;
+            $jumlah_tidak_hadir = (int) $jumlah_hari_produktif - $jumlah_kehadiran;
+
+            if ($jumlah_tidak_hadir > 0) {
+                $potongan = (int) $jumlah_tidak_hadir * $uang_kehadiran;
+            }
+
+
+
+            // Panggil API prediksi
+            $DecisionTree = Http::post('http://127.0.0.1:9000/prediksi', [
+                'kehadiran' => (int) $point_kehadiran,
+                'target_kehadiran' => (int) $request->target_absensi,
+                'produktivitas' => (int) $produktivitas,
+                'target_produktivitas' => (int) $target_tasks->target_produktivitas ?? 0,
+                'bonus_jabatan' => (int) $data_jabatan->bonus,
+            ]);
+
+            $resp = $DecisionTree->json();
+            $kinerja = $resp['kinerja'];
+            $bonus = $resp['bonus'];
+
+            $total_gaji = ($gaji_pokok + $uang_makan + $tunjangan + $total_uang_kehadiran + $bonus) - $potongan;
+
+            $dataInput = [
+                'id_karyawan' => $request->id_karyawan,
+                // 'id_direktur' => $request->id_direktur,
+                'tanggal' => $tanggal,
+                'kinerja' => $kinerja,
+                'jumlah_kehadiran' => $jumlah_kehadiran,
+                'jumlah_cuti' => $jumlah_cuti,
+                'jumlah_izin' => $jumlah_izin,
+                'total_point_kehadiran' => $point_kehadiran,
+                'total_point_task' => $produktivitas,
+                'gaji_pokok' => $gaji_pokok,
+                'uang_kehadiran' => $total_uang_kehadiran,
+                'uang_makan' => $uang_makan,
+                'tunjangan' => $tunjangan,
+                'bonus' => $bonus,
+                'potongan' => $potongan,
+                'total_gaji' => $total_gaji
+            ];
+
+            // Simpan ke database jika perlu
+            DB::table('payroll')->where('id', $id)->update($dataInput);
+            return response()->json($dataInput);
+        } catch (Throwable $e) {
+            return response()->json(['error' => $e->getMessage() . ' ' . $e->getLine()], 500);
         }
     }
 }
