@@ -1,18 +1,21 @@
 <?php
 
-use App\Http\Controllers\IzinController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\AbsensiController;
-use App\Http\Controllers\KaryawanController;
-use App\Http\Controllers\LemburController;
 use App\Http\Controllers\CutiController;
-use App\Http\Controllers\DataKantorController;
-use App\Http\Controllers\JabatanController;
-use App\Http\Controllers\DinasLuarKotaController;
-use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\IzinController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\LemburController;
+use App\Http\Controllers\AbsensiController;
+use App\Http\Controllers\JabatanController;
+use App\Http\Controllers\KinerjaController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\KaryawanController;
+use App\Http\Controllers\DataKantorController;
+use App\Http\Controllers\DinasLuarKotaController;
 
 // Rute Publik
 Route::post('/register', [AuthController::class, 'register']);
@@ -85,9 +88,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('payroll-store', [PayrollController::class, 'store']);
     Route::put('/payroll-update/{id}', [PayrollController::class, 'update']);
 
+    Route::get('/kinerja-summary', [KinerjaController::class, 'getKinerjaSummary']);
+    Route::post('kinerja-store', [KinerjaController::class, 'store']);
+    Route::put('/kinerja-update/{id}', [KinerjaController::class, 'update']);
+
     Route::post('/datakantor/get', [DataKantorController::class, 'getDataKantor']);
     Route::get('user/get', [KaryawanController::class, 'getuser']);
     Route::get('user/absensi', [AbsensiController::class, 'getuserabsensi']);
     Route::get('user/izin', [AbsensiController::class, 'getuserizin']);
     Route::post('izin/tahunan', [IzinController::class, 'userCutiPertahun']);
+
+    Route::get('user_data/', [UserController::class, 'index']);
+    Route::post('user_data/', [UserController::class, 'store']);
+    Route::put('user_data/{id}', [UserController::class, 'update']);
+    Route::delete('user_data/{id}', [UserController::class, 'destroy']);
+
+    Route::put('profile/', [ProfileController::class, 'update']);
 });

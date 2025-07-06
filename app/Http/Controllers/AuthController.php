@@ -95,12 +95,13 @@ class AuthController extends Controller
                 'message' => 'Login sukses.',
                 'user' => [
                     'email' => $user->email,
+                    'name' => $user->nama_karyawan,
                     'role' => $user->role,
                     'token' => $token
                 ],
             ], 200);
         } catch (\Throwable $th) {
-            return response()->json(['message' => 'Login gagal'], 500);
+            return response()->json(['message' => 'Login gagal'.$th->getMessage()], 500);
         }
     }
 

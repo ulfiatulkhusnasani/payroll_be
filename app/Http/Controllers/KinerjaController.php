@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 
-class PayrollController extends Controller
+class KinerjaController extends Controller
 {
     // Fungsi untuk menghitung hari kerja dalam rentang tanggal (tidak termasuk Minggu dan hari libur nasional)
     protected function calculateWorkingDays($startDate, $endDate, $holidays = [])
@@ -47,15 +47,13 @@ class PayrollController extends Controller
         return $totalBonus;
     }
 
-    // Tambahkan ini di controller Laravel Anda (misalnya, KaryawanController)
     public function index()
     {
         $allKaryawan = Karyawan::with('jabatan')->get();
         return response()->json($allKaryawan);
     }
 
-    // Mendapatkan rekap jumlah izin, cuti, dan dinas luar kota serta kehadiran untuk semua karyawan
-    public function getPayrollSummary()
+    public function getKinerjaSummary()
     {
         try {
             // Mendapatkan semua karyawan dari tabel Karyawan
@@ -80,7 +78,7 @@ class PayrollController extends Controller
                     'p.gaji_pokok',
                     'p.id as id_payroll',
                     'p.uang_kehadiran',
-                      'p.total_point_kehadiran',
+                    'p.total_point_kehadiran',
                     'p.total_point_task',
                     'p.uang_makan',
                     'p.bonus',
@@ -121,10 +119,11 @@ class PayrollController extends Controller
                     'nama_karyawan' => $namaKaryawan,
                     'jabatan' => $karyawan->jabatan ?? 'Tidak Ada Jabatan',
                     'gaji_pokok' => $karyawan->gaji_pokok ?? 0,
-                    'uang_harian' => $karyawan->uang_kehadiran ?? 0,
-                    'id_payroll' => $karyawan->id_payroll,
                     'bulan'=> $bulan,
                     'tanggal'=> $karyawan->tanggal,
+                    'uang_harian' => $karyawan->uang_kehadiran ?? 0,
+                    'id_payroll' => $karyawan->id_payroll,
+                    'kinerja'=> $karyawan->kinerja,
                     'uang_makan' => $karyawan->uang_makan ?? 0,
                     'bonus' => $karyawan->bonus ?? 0,
                     'total_point_task' => $karyawan->total_point_task ?? 0,
@@ -151,91 +150,6 @@ class PayrollController extends Controller
             }
 
             return response()->json(['payroll_summaries' => $payrollSummaries]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
-
-    public function generateSlipGaji(Request $request)
-    {
-        // Ambil user saat ini
-        try {
-            $tanggal = Carbon::make($request->tanggal);
-            $bulan = $tanggal->month;
-            $tahun = $tanggal->year;
-            // Mendapatkan semua karyawan dari tabel Karyawan
-            $karyawan = DB::table('payroll as p')
-                ->join('karyawans as karyawan', 'p.id_karyawan', '=', 'karyawan.id')
-                ->leftJoin('karyawans as direktur', 'p.id_direktur', '=', 'direktur.id')
-                ->leftJoin('users as u', 'karyawan.email', '=', 'u.email')
-                ->leftJoin('users as ud', 'direktur.email', '=', 'ud.email')
-                ->leftJoin('jabatan as j', 'karyawan.jabatan_id', '=', 'j.id')
-                ->where('karyawan.status', 'active')
-                ->select(
-                    'karyawan.id',
-                    'u.nama_karyawan',
-                    'karyawan.nip',
-                    'karyawan.nik',
-                    'karyawan.email',
-                    'karyawan.alamat',
-                    'karyawan.status',
-                    'karyawan.jabatan_id',
-                    'karyawan.no_handphone',
-                    'j.jabatan',
-                    'p.gaji_pokok',
-                    'p.uang_kehadiran',
-                    'p.uang_makan',
-                    'p.total_point_kehadiran',
-                    'p.total_point_task',
-                    'p.bonus',
-                    'p.tunjangan',
-                    'p.potongan',
-                    'p.total_gaji',
-                    'p.jumlah_izin',
-                    'p.jumlah_cuti',
-                    'p.jumlah_kehadiran',
-                    'p.kinerja',
-                    'p.tanggal',
-
-                    'ud.nama_karyawan as nama_direktur',
-                )
-                ->where('karyawan.email', $request->email)
-                ->whereMonth('p.tanggal', $bulan)
-                ->whereYear('p.tanggal', $tahun)
-                ->first();
-
-
-            // Validasi jika tabel Karyawan kosong
-            if (!$karyawan) {
-                return response()->json(['message' => 'Slip gaji anda belum pulang di bulan ini'], 404);
-            }
-
-            $payrollSummaries = [];
-
-            // Iterasi melalui semua karyawan
-            $namaKaryawan = $karyawan->nama_karyawan;
-            // Menyimpan hasil rekap per karyawan
-
-            $tanggal = Carbon::make($karyawan->tanggal);
-            Carbon::setLocale('id'); // Pastikan menggunakan locale Bahasa Indonesia
-            $bulan = $tanggal->translatedFormat('F');
-            $tahun = $tanggal->year;
-
-            $payrollSummaries = [
-                'month' => "$bulan $tahun",
-                'name' => $namaKaryawan,
-                'position' => $karyawan->jabatan,
-                'employeeId' => $karyawan->nip,
-                'basicSalary' => $karyawan->total_gaji,
-                'allowances' => $karyawan->tunjangan,
-                'deductions' => $karyawan->potongan,
-                'netSalary' => $karyawan->total_gaji,
-                'dirName' => $karyawan->nama_direktur,
-                'performance' => $karyawan->kinerja,
-            ];
-
-
-            return response()->json($payrollSummaries);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
