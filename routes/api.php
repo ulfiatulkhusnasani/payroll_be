@@ -50,7 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rute untuk CutiController
     Route::post('/izin/store', [IzinController::class, 'store']);
     Route::post('/izin', [IzinController::class, 'index']);
-    Route::put('/izin/{id}', [IzinController::class, 'update']);
+    Route::post('/izin/{id}/update', [IzinController::class, 'update']);
     Route::delete('/izin/{id}', [IzinController::class, 'destroy']);
 
     // Route Jabatan

@@ -84,8 +84,7 @@ class IzinController extends Controller
             'alasan' => 'required|string|max:255',
             'keterangan' => 'nullable|string|max:255',
             'status' => 'required|in:pending,disetujui,ditolak',
-            'lampiran' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
-
+            'lampiran' => 'nullable|images|mimes:jpeg,png,jpg|max:5120',
         ]);
 
         // Menghitung durasi secara otomatis
@@ -109,7 +108,7 @@ class IzinController extends Controller
             ]));
             return response()->json([
                 'message' => 'Izin berhasil diupdate.',
-                'data' => $izin
+                'data' => $request->all()
             ], 200);
         } else {
             return response()->json(['message' => 'Izin tidak ditemukan.'], 404);
