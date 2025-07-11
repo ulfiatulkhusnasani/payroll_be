@@ -41,7 +41,7 @@ class AbsensiController extends Controller
     public function index(Request $request)
     {
         try {
-            $absensi =  DB::table('absensi as a')
+            $absensi = DB::table('absensi as a')
                 ->join('karyawans as k', 'a.id_karyawan', 'k.id')
                 ->leftJoin('users as u', 'k.email', 'u.email')
                 ->select('a.*', 'u.nama_karyawan', 'u.email as email_karyawan')
@@ -82,15 +82,28 @@ class AbsensiController extends Controller
                 ->latest('created_at')
                 ->first();
 
-            if (!$dataKantor || ! $karyawan) {
+            if (!$dataKantor || !$karyawan) {
                 return response()->json([
                     'message' => 'Data tidak ditemukan',
                     'error' => 'data tidak ditemukan',
                 ], 404);
             }
 
-            // Hitung status kehadiran
+            $jarak = $this->haversineDistance(
+                $validated['latitude_masuk'],
+                $validated['longitude_masuk'],
+                $dataKantor->latitude_kantor,
+                $dataKantor->longitude_kantor
+            );
 
+            if ($jarak <= 1000) {
+                if ($jarak > 30) {
+                    return response()->json([
+                        'message' => 'Karyawan berada di luar radius 30 meter dari kantor jarak ' . round($jarak, 2) . ' meter',
+                        'jarak_ditempuh' => round($jarak, 2) . ' meter'
+                    ], 422);
+                }
+            }
 
             $jamMasukKantor = Carbon::createFromFormat('H:i:s', $dataKantor->jam_masuk);
 
@@ -121,9 +134,11 @@ class AbsensiController extends Controller
                 ]
             ], 201);
         } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
             return response()->json([
-                'message' => 'Validasi gagal',
-                'errors' => $e->errors(),
+                'message' => 'Validasi gagal ' . $firstError,
+                'errors' => $firstError,
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
@@ -145,6 +160,35 @@ class AbsensiController extends Controller
                 'latitude_pulang' => 'required|numeric',
                 'longitude_pulang' => 'required|numeric',
             ]);
+
+            // Ambil data kantor terbaru
+            $dataKantor = DB::table('data_kantor')
+                ->latest('created_at')
+                ->first();
+
+            if (!$dataKantor) {
+                return response()->json([
+                    'message' => 'Data tidak ditemukan',
+                    'error' => 'data tidak ditemukan',
+                ], 404);
+            }
+
+            $jarak = $this->haversineDistance(
+                $validated['latitude_pulang'],
+                $validated['longitude_pulang'],
+                $dataKantor->latitude_kantor,
+                $dataKantor->longitude_kantor
+            );
+
+            if ($jarak <= 1000) {
+                if ($jarak > 30) {
+                    return response()->json([
+                        'message' => 'Karyawan berada di luar radius 30 meter dari kantor jarak ' . round($jarak, 2) . ' meter',
+                        'jarak_ditempuh' => round($jarak, 2) . ' meter'
+                    ], 422);
+                }
+            }
+
 
             // Update data absensi
             $absensi->update($validated);
@@ -248,4 +292,21 @@ class AbsensiController extends Controller
             ], 500);
         }
     }
+
+    protected function haversineDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $earthRadius = 6371000; // in meters
+        $latFrom = deg2rad($lat1);
+        $lonFrom = deg2rad($lon1);
+        $latTo = deg2rad($lat2);
+        $lonTo = deg2rad($lon2);
+
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+
+        $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+        return $earthRadius * $angle;
+    }
+
 }
