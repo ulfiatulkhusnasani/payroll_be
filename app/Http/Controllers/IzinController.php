@@ -44,7 +44,7 @@ class IzinController extends Controller
             'tgl_mulai' => 'required|date|before_or_equal:tgl_selesai',
             'tgl_selesai' => 'required|date|after_or_equal:tgl_mulai',
             'alasan' => 'required|string|max:255',
-            'keterangan' => 'nullable|string|max:255',
+            'keterangan' => 'required|string|max:255',
             'status' => 'required|in:pending,disetujui,ditolak',
             'lampiran' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
         ]);
@@ -82,7 +82,7 @@ class IzinController extends Controller
             'tgl_mulai' => 'required|date|before_or_equal:tgl_selesai',
             'tgl_selesai' => 'required|date|after_or_equal:tgl_mulai',
             'alasan' => 'required|string|max:255',
-            'keterangan' => 'nullable|string|max:255',
+            'keterangan' => 'required|string|max:255',
             'status' => 'required|in:pending,disetujui,ditolak',
             'lampiran' => 'nullable|images|mimes:jpeg,png,jpg|max:5120',
         ]);

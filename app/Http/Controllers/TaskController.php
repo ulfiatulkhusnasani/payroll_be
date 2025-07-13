@@ -72,6 +72,14 @@ class TaskController extends Controller
 
         $task = Task::findOrFail($id);
 
+        $tgl_selesai = $request->tgl_selesai;
+
+        if (!$request->tgl_selesai) {
+            if ($request->status == 'selesai') {
+                $tgl_selesai = date('Y-m-d');
+            }
+        }
+
         $task->update([
             'id_karyawan' => $request->id_karyawan,
             'judul_proyek' => $request->judul_proyek,
@@ -79,7 +87,7 @@ class TaskController extends Controller
             'status' => $request->status,
             'tgl_mulai' => $request->tgl_mulai,
             'batas_penyelesaian' => $request->batas_penyelesaian,
-            'tgl_selesai' => $request->tgl_selesai,
+            'tgl_selesai' => $tgl_selesai,
             'point' => $request->point, // Update point
             'status_approval' => $request->status_approval, // Update status_approval
         ]);
