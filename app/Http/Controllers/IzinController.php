@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Izin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class IzinController extends Controller
 {
@@ -38,80 +39,110 @@ class IzinController extends Controller
 
     public function store(Request $request)
     {
-        // Validasi input request
-        $request->validate([
-            'id_karyawan' => 'required|exists:karyawans,id', // Harus ada di tabel karyawans
-            'tgl_mulai' => 'required|date|before_or_equal:tgl_selesai',
-            'tgl_selesai' => 'required|date|after_or_equal:tgl_mulai',
-            'alasan' => 'required|string|max:255',
-            'keterangan' => 'required|string|max:255',
-            'status' => 'required|in:pending,disetujui,ditolak',
-            'lampiran' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
-        ]);
+        try {
+            // Validasi input request
+            $request->validate([
+                'id_karyawan' => 'required|exists:karyawans,id', // Harus ada di tabel karyawans
+                'tgl_mulai' => 'required|date|before_or_equal:tgl_selesai',
+                'tgl_selesai' => 'required|date|after_or_equal:tgl_mulai',
+                'alasan' => 'required|string|max:255',
+                'keterangan' => 'required|string|max:255',
+                'status' => 'required|in:pending,disetujui,ditolak',
+                'lampiran' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            ]);
 
 
-        // Handle image update
-        $imageBase64 = '';
-        if ($request->hasFile('lampiran')) {
-            $image = $request->file('lampiran');
-            $imageBase64 = base64_encode(file_get_contents($image->getRealPath()));
+            // Handle image update
+            $imageBase64 = '';
+            if ($request->hasFile('lampiran')) {
+                $image = $request->file('lampiran');
+                $imageBase64 = base64_encode(file_get_contents($image->getRealPath()));
+            }
+
+
+
+            // Hitung durasi
+            $durasi = (new \Carbon\Carbon($request->tgl_selesai))->diffInDays($request->tgl_mulai) + 1;
+
+            $izin = Izin::create(array_merge($request->all(), [
+                'durasi' => $durasi,
+                'lampiran' => $imageBase64
+            ]));
+
+            return response()->json([
+                'message' => 'Izin berhasil ditambahkan.',
+                'data' => $izin
+            ], 201);
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-
-
-        // Hitung durasi
-        $durasi = (new \Carbon\Carbon($request->tgl_selesai))->diffInDays($request->tgl_mulai) + 1;
-
-        $izin = Izin::create(array_merge($request->all(), [
-            'durasi' => $durasi,
-            'lampiran' => $imageBase64
-        ]));
-
-        return response()->json([
-            'message' => 'Izin berhasil ditambahkan.',
-            'data' => $izin
-        ], 201);
     }
 
 
     public function update(Request $request, $id)
     {
-        // Validasi input request
-        $request->validate([
-            'id_karyawan' => 'required|exists:karyawans,id',
-            'tgl_mulai' => 'required|date|before_or_equal:tgl_selesai',
-            'tgl_selesai' => 'required|date|after_or_equal:tgl_mulai',
-            'alasan' => 'required|string|max:255',
-            'keterangan' => 'required|string|max:255',
-            'status' => 'required|in:pending,disetujui,ditolak',
-            'lampiran' => 'nullable|images|mimes:jpeg,png,jpg|max:5120',
-        ]);
 
-        // Menghitung durasi secara otomatis
-        $durasi = (new \Carbon\Carbon($request->tgl_selesai))->diffInDays(new \Carbon\Carbon($request->tgl_mulai)) + 1;
+        try {
+            // Validasi input request
+            $request->validate([
+                'id_karyawan' => 'required|exists:karyawans,id',
+                'tgl_mulai' => 'required|date|before_or_equal:tgl_selesai',
+                'tgl_selesai' => 'required|date|after_or_equal:tgl_mulai',
+                'alasan' => 'required|string|max:255',
+                'keterangan' => 'required|string|max:255',
+                'status' => 'required|in:pending,disetujui,ditolak',
+                'lampiran' => 'nullable|images|mimes:jpeg,png,jpg|max:5120',
+            ]);
 
-        $izin = Izin::find($id);
+            // Menghitung durasi secara otomatis
+            $durasi = (new \Carbon\Carbon($request->tgl_selesai))->diffInDays(new \Carbon\Carbon($request->tgl_mulai)) + 1;
 
-        $imageBase64 = '';
-        if ($request->hasFile('lampiran')) {
-            $image = $request->file('lampiran');
-            $imageBase64 = base64_encode(file_get_contents($image->getRealPath()));
-        } else {
-            $imageBase64 = $izin->lampiran;
-        }
+            $izin = Izin::find($id);
+
+            $imageBase64 = '';
+            if ($request->hasFile('lampiran')) {
+                $image = $request->file('lampiran');
+                $imageBase64 = base64_encode(file_get_contents($image->getRealPath()));
+            } else {
+                $imageBase64 = $izin->lampiran;
+            }
 
 
-        if ($izin) {
-            $izin->update(array_merge($request->all(), [
-                'durasi' => $durasi,
-                'lampiran' => $imageBase64
-            ]));
+            if ($izin) {
+                $izin->update(array_merge($request->all(), [
+                    'durasi' => $durasi,
+                    'lampiran' => $imageBase64
+                ]));
+                return response()->json([
+                    'message' => 'Izin berhasil diupdate.',
+                    'data' => $request->all()
+                ], 200);
+            } else {
+                return response()->json(['message' => 'Izin tidak ditemukan.'], 404);
+            }
+
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
             return response()->json([
-                'message' => 'Izin berhasil diupdate.',
-                'data' => $request->all()
-            ], 200);
-        } else {
-            return response()->json(['message' => 'Izin tidak ditemukan.'], 404);
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 

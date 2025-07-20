@@ -87,11 +87,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payroll-slip', [PayrollController::class, 'generateSlipGaji']);
     Route::post('payroll-store', [PayrollController::class, 'store']);
     Route::put('/payroll-update/{id}', [PayrollController::class, 'update']);
-
+    
     Route::get('/kinerja-summary', [KinerjaController::class, 'getKinerjaSummary']);
     Route::post('kinerja-store', [KinerjaController::class, 'store']);
     Route::put('/kinerja-update/{id}', [KinerjaController::class, 'update']);
-
+    Route::post('/kinerja-delete', [KinerjaController::class, 'destroy']);
+    
     Route::post('/datakantor/get', [DataKantorController::class, 'getDataKantor']);
     Route::get('user/get', [KaryawanController::class, 'getuser']);
     Route::get('user/absensi', [AbsensiController::class, 'getuserabsensi']);

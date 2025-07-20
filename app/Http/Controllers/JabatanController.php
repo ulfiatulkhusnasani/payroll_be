@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Jabatan;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class JabatanController extends Controller
 {
@@ -17,25 +18,43 @@ class JabatanController extends Controller
     // Menyimpan data jabatan baru
     public function store(Request $request)
     {
-        // Validasi data input
-        $request->validate([
-            'jabatan' => 'required|string|max:255',
-            'gaji_pokok' => 'required|numeric|min:0',
-            'uang_kehadiran_perhari' => 'required|numeric|min:0',
-            'uang_makan' => 'required|numeric|min:0',
-            'bonus' => 'nullable|numeric|min:0',
-            'tunjangan' => 'nullable|numeric|min:0',
-            'potongan' => 'nullable|numeric|min:0',
-        ]);
 
-        // Membuat entitas Jabatan baru
-        $jabatan = Jabatan::create($request->all());
+        try {
 
-        // Mengembalikan respon sukses
-        return response()->json([
-            'message' => 'Jabatan berhasil ditambahkan',
-            'data' => $jabatan
-        ], 201);
+
+            // Validasi data input
+            $request->validate([
+                'jabatan' => 'required|string|max:255',
+                'gaji_pokok' => 'required|numeric|min:0',
+                'uang_kehadiran_perhari' => 'required|numeric|min:0',
+                'uang_makan' => 'required|numeric|min:0',
+                'bonus' => 'required|numeric|min:0',
+                'tunjangan' => 'required|numeric|min:0',
+                'potongan' => 'required|numeric|min:0',
+            ]);
+
+            // Membuat entitas Jabatan baru
+            $jabatan = Jabatan::create($request->all());
+
+            // Mengembalikan respon sukses
+            return response()->json([
+                'message' => 'Jabatan berhasil ditambahkan',
+                'data' => $jabatan
+            ], 201);
+
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     // Menampilkan data jabatan berdasarkan ID

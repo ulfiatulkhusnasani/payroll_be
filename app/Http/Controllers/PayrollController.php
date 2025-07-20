@@ -14,6 +14,7 @@ use App\Models\DinasLuarKota;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 
 class PayrollController extends Controller
 {
@@ -80,7 +81,7 @@ class PayrollController extends Controller
                     'p.gaji_pokok',
                     'p.id as id_payroll',
                     'p.uang_kehadiran',
-                      'p.total_point_kehadiran',
+                    'p.total_point_kehadiran',
                     'p.total_point_task',
                     'p.uang_makan',
                     'p.bonus',
@@ -95,12 +96,13 @@ class PayrollController extends Controller
 
                     'ud.nama_karyawan as nama_direktur',
                 )
+                ->orderBy('p.tanggal', 'desc')
                 ->get();
 
 
             // Validasi jika tabel Karyawan kosong
             if ($allKaryawan->isEmpty()) {
-                return response()->json(['error' => 'Tidak ada karyawan yang ditemukan'], 404);
+                return response()->json(['message' => 'Tidak ada karyawan yang ditemukan'], 404);
             }
 
             $payrollSummaries = [];
@@ -123,8 +125,8 @@ class PayrollController extends Controller
                     'gaji_pokok' => $karyawan->gaji_pokok ?? 0,
                     'uang_harian' => $karyawan->uang_kehadiran ?? 0,
                     'id_payroll' => $karyawan->id_payroll,
-                    'bulan'=> $bulan,
-                    'tanggal'=> $karyawan->tanggal,
+                    'bulan' => $bulan,
+                    'tanggal' => $karyawan->tanggal,
                     'uang_makan' => $karyawan->uang_makan ?? 0,
                     'bonus' => $karyawan->bonus ?? 0,
                     'total_point_task' => $karyawan->total_point_task ?? 0,
@@ -140,7 +142,7 @@ class PayrollController extends Controller
                         'name' => $namaKaryawan,
                         'position' => $karyawan->jabatan,
                         'employeeId' => $karyawan->nip,
-                        'basicSalary' => $karyawan->total_gaji,
+                        'basicSalary' => $karyawan->gaji_pokok,
                         'allowances' => $karyawan->tunjangan,
                         'deductions' => $karyawan->potongan,
                         'netSalary' => $karyawan->total_gaji,
@@ -152,7 +154,7 @@ class PayrollController extends Controller
 
             return response()->json(['payroll_summaries' => $payrollSummaries]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
@@ -202,6 +204,7 @@ class PayrollController extends Controller
                 ->where('karyawan.email', $request->email)
                 ->whereMonth('p.tanggal', $bulan)
                 ->whereYear('p.tanggal', $tahun)
+                ->orderBy('p.tanggal', 'desc')
                 ->first();
 
 
@@ -226,7 +229,7 @@ class PayrollController extends Controller
                 'name' => $namaKaryawan,
                 'position' => $karyawan->jabatan,
                 'employeeId' => $karyawan->nip,
-                'basicSalary' => $karyawan->total_gaji,
+                'basicSalary' => $karyawan->gaji_pokok,
                 'allowances' => $karyawan->tunjangan,
                 'deductions' => $karyawan->potongan,
                 'netSalary' => $karyawan->total_gaji,
@@ -237,7 +240,7 @@ class PayrollController extends Controller
 
             return response()->json($payrollSummaries);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
@@ -257,6 +260,16 @@ class PayrollController extends Controller
             $tanggal = Carbon::make($request->tanggal);
             $bulan = $tanggal->month;
             $tahun = $tanggal->year;
+
+            $payroll = DB::table('payroll')
+                ->where('id_karyawan', $request->id_karyawan)
+                ->whereMonth('tanggal', $bulan)
+                ->whereYear('tanggal', $tahun)
+                ->first();
+
+            if ($payroll) {
+                return response()->json(['message' => "Karyawan sudah dibuatkan slip gaji untuk bulan ini"], 500);
+            }
 
 
             // Ambil data jabatan
@@ -301,7 +314,7 @@ class PayrollController extends Controller
                 ->count();
 
             // Produktivitas (total point)
-            $produktivitas  = 0;
+            $produktivitas = 0;
             $tasks = DB::table('tasks as t')
                 ->select('t.tgl_mulai', 't.tgl_selesai', 't.batas_penyelesaian', 't.point')
                 ->where('t.id_karyawan', $request->id_karyawan)
@@ -417,7 +430,15 @@ class PayrollController extends Controller
             $bulan = $tanggal->month;
             $tahun = $tanggal->year;
 
+            $payroll = DB::table('payroll')
+                ->where('id_karyawan', $request->id_karyawan)
+                ->whereMonth('tanggal', $bulan)
+                ->whereYear('tanggal', $tahun)
+                ->first();
 
+            if ($payroll) {
+                return response()->json(['message' => "Karyawan sudah dibuatkan slip gaji untuk bulan ini"], 500);
+            }
             // Ambil data jabatan
             $data_jabatan = DB::table('karyawans as k')
                 ->leftJoin('jabatan as j', 'j.id', 'k.jabatan_id')
@@ -460,7 +481,7 @@ class PayrollController extends Controller
                 ->count();
 
             // Produktivitas (total point)
-            $produktivitas  = 0;
+            $produktivitas = 0;
             $tasks = DB::table('tasks as t')
                 ->select('t.tgl_mulai', 't.tgl_selesai', 't.batas_penyelesaian', 't.point')
                 ->where('t.id_karyawan', $request->id_karyawan)
@@ -555,7 +576,9 @@ class PayrollController extends Controller
             DB::table('payroll')->where('id', $id)->update($dataInput);
             return response()->json($dataInput);
         } catch (Throwable $e) {
-            return response()->json(['error' => $e->getMessage() . ' ' . $e->getLine()], 500);
+            return response()->json(['message' => $e->getMessage() . ' ' . $e->getLine()], 500);
         }
     }
+
+    
 }

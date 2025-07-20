@@ -14,6 +14,7 @@ use App\Models\DinasLuarKota;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 
 class KinerjaController extends Controller
 {
@@ -119,11 +120,11 @@ class KinerjaController extends Controller
                     'nama_karyawan' => $namaKaryawan,
                     'jabatan' => $karyawan->jabatan ?? 'Tidak Ada Jabatan',
                     'gaji_pokok' => $karyawan->gaji_pokok ?? 0,
-                    'bulan'=> $bulan,
-                    'tanggal'=> $karyawan->tanggal,
+                    'bulan' => $bulan,
+                    'tanggal' => $karyawan->tanggal,
                     'uang_harian' => $karyawan->uang_kehadiran ?? 0,
                     'id_payroll' => $karyawan->id_payroll,
-                    'kinerja'=> $karyawan->kinerja,
+                    'kinerja' => $karyawan->kinerja,
                     'uang_makan' => $karyawan->uang_makan ?? 0,
                     'bonus' => $karyawan->bonus ?? 0,
                     'total_point_task' => $karyawan->total_point_task ?? 0,
@@ -172,6 +173,17 @@ class KinerjaController extends Controller
             $bulan = $tanggal->month;
             $tahun = $tanggal->year;
 
+            $payroll = DB::table('payroll')
+                ->where('id_karyawan', $request->id_karyawan)
+                ->whereMonth('tanggal', $bulan)
+                ->whereYear('tanggal', $tahun)
+                ->first();
+
+            if ($payroll) {
+                return response()->json(['message' => "Karyawan sudah dibuatkan slip gaji untuk bulan ini"], 500);
+            }
+
+
 
             // Ambil data jabatan
             $data_jabatan = DB::table('karyawans as k')
@@ -215,7 +227,7 @@ class KinerjaController extends Controller
                 ->count();
 
             // Produktivitas (total point)
-            $produktivitas  = 0;
+            $produktivitas = 0;
             $tasks = DB::table('tasks as t')
                 ->select('t.tgl_mulai', 't.tgl_selesai', 't.batas_penyelesaian', 't.point')
                 ->where('t.id_karyawan', $request->id_karyawan)
@@ -331,6 +343,16 @@ class KinerjaController extends Controller
             $bulan = $tanggal->month;
             $tahun = $tanggal->year;
 
+            $payroll = DB::table('payroll')
+                ->where('id_karyawan', $request->id_karyawan)
+                ->whereMonth('tanggal', $bulan)
+                ->whereYear('tanggal', $tahun)
+                ->first();
+
+            if ($payroll) {
+                return response()->json(['message' => "Karyawan sudah dibuatkan slip gaji untuk bulan ini"], 500);
+            }
+
 
             // Ambil data jabatan
             $data_jabatan = DB::table('karyawans as k')
@@ -374,7 +396,7 @@ class KinerjaController extends Controller
                 ->count();
 
             // Produktivitas (total point)
-            $produktivitas  = 0;
+            $produktivitas = 0;
             $tasks = DB::table('tasks as t')
                 ->select('t.tgl_mulai', 't.tgl_selesai', 't.batas_penyelesaian', 't.point')
                 ->where('t.id_karyawan', $request->id_karyawan)
@@ -468,8 +490,40 @@ class KinerjaController extends Controller
             // Simpan ke database jika perlu
             DB::table('payroll')->where('id', $id)->update($dataInput);
             return response()->json($dataInput);
-        } catch (Throwable $e) {
-            return response()->json(['error' => $e->getMessage() . ' ' . $e->getLine()], 500);
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function destroy(Request $request)
+    {
+        try {
+
+            DB::table('payroll')->where('id', $request->id)->delete();
+            return response()->json(['message' => "berhasil"]);
+
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 }

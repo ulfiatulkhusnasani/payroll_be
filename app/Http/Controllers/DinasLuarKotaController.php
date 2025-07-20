@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DinasLuarKota;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use App\Models\DinasLuarKota;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class DinasLuarKotaController extends Controller
 {
@@ -65,6 +66,13 @@ class DinasLuarKotaController extends Controller
             ]);
 
             return response()->json(['message' => 'Dinas luar kota berhasil ditambahkan', 'data' => $dinasLuarKota], 201);
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Terjadi error saat menyimpan data: ' . $e->getMessage());
             return response()->json([
@@ -131,6 +139,13 @@ class DinasLuarKotaController extends Controller
             $dinasLuarKota->save();
 
             return response()->json(['message' => 'Data berhasil diperbarui', 'data' => $dinasLuarKota], 200);
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Error updating data: ' . $e->getMessage());
             return response()->json(['error' => 'Gagal memperbarui data'], 500);

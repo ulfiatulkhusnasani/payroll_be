@@ -24,7 +24,7 @@ class ProfileController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validasi gagal',
+                'message' => $validator->errors()->first(),
                 'errors' => $validator->errors()
             ], 422);
         }

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Izin; // Import the Izin model
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\ValidationException;
 
 class KaryawanController extends Controller
 {
@@ -55,11 +56,14 @@ class KaryawanController extends Controller
             ->leftJoin('jabatan as j', 'k.jabatan_id', 'j.id')
             ->leftJoin('izin as i', function ($join) {
                 $join->on('k.id', '=', 'i.id_karyawan')
-                ->where('i.status', 'disetujui')
+                    ->where('i.status', 'disetujui')
                     ->whereBetween('i.created_at', [now()->startOfYear(), now()->endOfYear()]);
             })
             ->when($request->email, function ($query) use ($request) {
                 $query->where('k.email', $request->email);
+            })
+            ->when($request->status, function ($query) use ($request) {
+                $query->where('k.status', $request->status);
             })
             ->groupBy(
                 'k.id',
@@ -124,10 +128,16 @@ class KaryawanController extends Controller
             ]);
 
             return response()->json(['message' => 'Karyawan created successfully', 'data' => $karyawan], 201);
-        } catch (\Exception $e) {
-            // Catch any exceptions and return a detailed error message
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
             return response()->json([
-                'message' => 'An error occurred while creating the karyawan',
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -143,35 +153,51 @@ class KaryawanController extends Controller
     // Memperbarui data karyawan
     public function update(Request $request, $id)
     {
-        $karyawan = Karyawan::findOrFail($id);
 
-        $validated = $request->validate([
-            'nip' => [
-                'required',
-                'string',
-                'size:8',
-                Rule::unique('karyawans', 'nip')->ignore($karyawan->id),
-            ],
-            'nik' => [
-                'required',
-                'string',
-                'size:16',
-                Rule::unique('karyawans', 'nik')->ignore($karyawan->id),
-            ],
-            'email' => [
-                'required',
-                'email',
-                Rule::unique('karyawans', 'email')->ignore($karyawan->id),
-            ],
-            'no_handphone' => 'required|string|min:10|max:15',
-            'alamat' => 'required|string|max:500',
-            'status' => 'required|string',
-            'jabatan_id' => 'required|exists:jabatan,id',
-        ]);
+        try {
+            $karyawan = Karyawan::findOrFail($id);
 
-        $karyawan->update(array_filter($validated));
+            $validated = $request->validate([
+                'nip' => [
+                    'required',
+                    'string',
+                    'size:8',
+                    Rule::unique('karyawans', 'nip')->ignore($karyawan->id),
+                ],
+                'nik' => [
+                    'required',
+                    'string',
+                    'size:16',
+                    Rule::unique('karyawans', 'nik')->ignore($karyawan->id),
+                ],
+                'email' => [
+                    'required',
+                    'email',
+                    Rule::unique('karyawans', 'email')->ignore($karyawan->id),
+                ],
+                'no_handphone' => 'required|string|min:10|max:15',
+                'alamat' => 'required|string|max:500',
+                'status' => 'required|string',
+                'jabatan_id' => 'required|exists:jabatan,id',
+            ]);
 
-        return response()->json(['message' => 'Karyawan updated successfully', 'data' => $karyawan], 200);
+            $karyawan->update(array_filter($validated));
+
+            return response()->json(['message' => 'Karyawan updated successfully', 'data' => $karyawan], 200);
+
+        } catch (ValidationException $e) {
+            $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
+
+            return response()->json([
+                'message' => $firstError,
+                'errors' => $firstError,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Terjadi kesalahan server',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function destroy($id)

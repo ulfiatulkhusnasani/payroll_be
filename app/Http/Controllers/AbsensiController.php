@@ -137,7 +137,7 @@ class AbsensiController extends Controller
             $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
 
             return response()->json([
-                'message' => 'Validasi gagal ' . $firstError,
+                'message' =>  $firstError,
                 'errors' => $firstError,
             ], 422);
         } catch (\Exception $e) {
