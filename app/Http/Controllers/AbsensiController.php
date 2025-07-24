@@ -111,7 +111,8 @@ class AbsensiController extends Controller
             $status = $jamMasukUser->greaterThan($jamMasukKantor) ? 'Terlambat' : 'Tepat Waktu';
 
             // Format tanggal
-            $tanggal = Carbon::parse($validated['tanggal'])->format('Y-m-d');
+
+            $tanggal = Carbon::parse($validated['tanggal'])->setTimezone('Asia/Jakarta')->format('Y-m-d');
 
             // Buat data absensi
             $absensi = Absensi::create([
@@ -137,7 +138,7 @@ class AbsensiController extends Controller
             $firstError = collect($e->errors())->first()[0] ?? 'Validasi gagal';
 
             return response()->json([
-                'message' =>  $firstError,
+                'message' => $firstError,
                 'errors' => $firstError,
             ], 422);
         } catch (\Exception $e) {
