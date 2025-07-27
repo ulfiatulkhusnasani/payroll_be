@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Task;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -45,14 +46,18 @@ class TaskController extends Controller
                 'point' => 'required|integer|min:0', // Validasi point
             ]);
 
+             $tgl_mulai = Carbon::parse($request->tgl_mulai)->setTimezone('Asia/Jakarta')->format('Y-m-d');
+             $batas_penyelesaian = Carbon::parse($request->batas_penyelesaian)->setTimezone('Asia/Jakarta')->format('Y-m-d');
+             $tgl_selesai = Carbon::parse($request->tgl_selesai)->setTimezone('Asia/Jakarta')->format('Y-m-d');
+
             $task = Task::create([
                 'id_karyawan' => $request->id_karyawan,
                 'judul_proyek' => $request->judul_proyek,
                 'kegiatan' => $request->kegiatan,
                 'status' => $request->status,
-                'tgl_mulai' => $request->tgl_mulai,
-                'batas_penyelesaian' => $request->batas_penyelesaian,
-                'tgl_selesai' => $request->tgl_selesai,
+                'tgl_mulai' => $tgl_mulai,
+                'batas_penyelesaian' => $batas_penyelesaian,
+                'tgl_selesai' => $tgl_selesai,
                 'point' => $request->point, // Simpan point
             ]);
 
@@ -90,7 +95,9 @@ class TaskController extends Controller
 
             $task = Task::findOrFail($id);
 
-            $tgl_selesai = $request->tgl_selesai;
+             $tgl_mulai = Carbon::parse($request->tgl_mulai)->setTimezone('Asia/Jakarta')->format('Y-m-d');
+             $batas_penyelesaian = Carbon::parse($request->batas_penyelesaian)->setTimezone('Asia/Jakarta')->format('Y-m-d');
+             $tgl_selesai = Carbon::parse($request->tgl_selesai)->setTimezone('Asia/Jakarta')->format('Y-m-d');
 
             if (!$request->tgl_selesai) {
                 if ($request->status == 'selesai') {
@@ -103,8 +110,8 @@ class TaskController extends Controller
                 'judul_proyek' => $request->judul_proyek,
                 'kegiatan' => $request->kegiatan,
                 'status' => $request->status,
-                'tgl_mulai' => $request->tgl_mulai,
-                'batas_penyelesaian' => $request->batas_penyelesaian,
+                'tgl_mulai' => $tgl_mulai,
+                'batas_penyelesaian' => $batas_penyelesaian,
                 'tgl_selesai' => $tgl_selesai,
                 'point' => $request->point, // Update point
                 'status_approval' => $request->status_approval, // Update status_approval

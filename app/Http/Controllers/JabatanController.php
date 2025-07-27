@@ -30,7 +30,7 @@ class JabatanController extends Controller
                 'uang_makan' => 'required|numeric|min:0',
                 'bonus' => 'required|numeric|min:0',
                 'tunjangan' => 'required|numeric|min:0',
-                'potongan' => 'required|numeric|min:0',
+                // 'potongan' => 'required|numeric|min:0',
             ]);
 
             // Membuat entitas Jabatan baru
@@ -79,7 +79,7 @@ class JabatanController extends Controller
             'uang_makan' => 'sometimes|numeric|min:0',
             'bonus' => 'nullable|numeric|min:0',
             'tunjangan' => 'nullable|numeric|min:0',
-            'potongan' => 'nullable|numeric|min:0',
+            // 'potongan' => 'nullable|numeric|min:0',
         ]);
 
         try {
