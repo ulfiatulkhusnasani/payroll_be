@@ -165,7 +165,7 @@ class KinerjaController extends Controller
                 // 'id_direktur' => 'required|exists:karyawans,id',
                 'tanggal' => 'required|date',
                 'target_absensi' => 'required|integer',
-                // 'target_produktivitas' => 'required|integer',
+                'target_produktivitas' => 'required|integer',
                 'hari_produktif' => 'required|integer',
             ]);
 
@@ -289,7 +289,7 @@ class KinerjaController extends Controller
                 'kehadiran' => (int) $point_kehadiran,
                 'target_kehadiran' => (int) $request->target_absensi,
                 'produktivitas' => (int) $produktivitas,
-                'target_produktivitas' => (int) $target_tasks->target_produktivitas ?? 0,
+                'target_produktivitas' => (int) $request->target_produktivitas ?? 0,
                 'bonus_jabatan' => (int) $data_jabatan->bonus,
             ]);
 
@@ -320,7 +320,7 @@ class KinerjaController extends Controller
 
             // Simpan ke database jika perlu
             DB::table('payroll')->insert($dataInput);
-            return response()->json($dataInput);
+            return response()->json([$dataInput,  $data_jabatan, $resp]);
         } catch (Throwable $e) {
             return response()->json(['error' => $e->getMessage() . ' ' . $e->getLine()], 500);
         }
@@ -335,7 +335,7 @@ class KinerjaController extends Controller
                 // 'id_direktur' => 'required|exists:karyawans,id',
                 'tanggal' => 'required|date',
                 'target_absensi' => 'required|integer',
-                // 'target_produktivitas' => 'required|integer',
+                'target_produktivitas' => 'required|integer',
                 'hari_produktif' => 'required|integer',
             ]);
 
@@ -458,7 +458,7 @@ class KinerjaController extends Controller
                 'kehadiran' => (int) $point_kehadiran,
                 'target_kehadiran' => (int) $request->target_absensi,
                 'produktivitas' => (int) $produktivitas,
-                'target_produktivitas' => (int) $target_tasks->target_produktivitas ?? 0,
+                'target_produktivitas' => (int) $request->target_produktivitas ?? 0,
                 'bonus_jabatan' => (int) $data_jabatan->bonus,
             ]);
 
